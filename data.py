@@ -3,14 +3,21 @@ import numpy as np
 import torch
 
 # Matrix
-class _mat:
+class tensor:
     '''
         input_size: order x k
         dims: dimensions with padded size, size is order
     '''
-    def __init__(self, input_size, data_name, device):                
-        self.src_tensor = np.load(data_name)
+    def __init__(self, input_size, input_path, sample_ratio, device):                
+        # Load data
+        self.src_tensor = np.load(input_path + ".npy")               
+        self.sample_idx = np.load(input_path + f'_sample_{sample_ratio}.npy')                        
+        self.num_sample = self.sample_idx.shape[0]
+        self.num_val = int(0.1 * self.num_sample)       
+        self.num_train = self.num_sample - self.num_val
         print(self.src_tensor.shape)
+        
+        # Set base        
         if self.src_tensor.dtype != "float64":
             self.src_tensor = self.src_tensor.astype(np.float64)
         self.src_dims = list(np.shape(self.src_tensor))                            
@@ -31,15 +38,18 @@ class _mat:
             self._base.insert(0, temp_base)
             temp_base *= self.dims[i]
             
+        # change idx to 1d
+        self.src_sample_idx = np.sum(self.sample_idx * np.array(self.src_base), axis=1)
+        self.src_train_idx = self.src_sample_idx[:self.num_train]
+        self.src_valid_idx = self.src_sample_idx[self.num_train:]
+        temp_set = set(self.src_sample_idx.tolist())
+        self.src_test_idx = np.array([i for i in range(self.src_vals.size) if i not in temp_set])        
+        del temp_set
+        
+        # Load to gpu
         device = torch.device("cuda:" + str(device))
         self.src_base = torch.tensor(self.src_base, dtype=torch.long, device=device)
         self.src_dims_gpu = torch.tensor(self.src_dims, dtype=torch.long, device=device)        
         self.dims = torch.tensor(self.dims, dtype=torch.long, device=device)        
         self._base = torch.tensor(self._base, dtype=torch.long, device=device)
         print(f'norm of the tensor: {self.norm}')
-
-    def extract_slice(self, curr_order, idx):
-        curr_input = [slice(None) for _ in range(self.order)]
-        curr_input[curr_order] = idx
-        curr_input = tuple(curr_input)
-        return self.src_tensor[curr_input].flatten()
