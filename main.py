@@ -109,13 +109,6 @@ if __name__ == '__main__':
         action="store", nargs='+', type=int
     )    
     
-    '''
-    parser.add_argument(
-        "-p", "--perms",
-        action="store", default=[], nargs='+', type=int
-    )  
-    '''
-    
     parser.add_argument(
         "-rk", "--rank",
         action="store", default=12, type=int
