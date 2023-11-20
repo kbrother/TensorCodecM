@@ -161,10 +161,6 @@ if __name__ == '__main__':
         action="store", default=10, type=int
     )
     
-    parser.add_argument(
-        "-m", "--model",
-        action="store", default="lstm", type=str
-    )
     
     args = parser.parse_args()      
     # decompsress m_list and n_list
