@@ -12,14 +12,13 @@ class rnn_model(torch.nn.Module):
         input_size: list of list that saves the size of inputs of all levels for each mode
         order x k
     '''
-    def __init__(self, rank, input_size, hidden_size, model_type):
+    def __init__(self, rank, input_size, hidden_size):
         super(rnn_model, self).__init__()
         self.rank = rank
         self.k = len(input_size[0])
         self.layer_first = nn.Linear(hidden_size, rank)
         self.layer_middle = nn.Linear(hidden_size, rank*rank)
         self.layer_final = nn.Linear(hidden_size, rank)        
-        self.model_type = model_type
         
         self.rnn = nn.LSTM(hidden_size, hidden_size)                    
         self.hidden_size = hidden_size        
@@ -46,19 +45,8 @@ class rnn_model(torch.nn.Module):
         _input = _input.transpose(0, 1)
         seq_len, batch_size = _input.size()
         _input = self.emb(_input)   # seq len x batch size x hidden dim                
-        if self.model_type != "mha":
-            self.rnn.flatten_parameters()
-        
-        if self.model_type == "mha":        
-            _input = _input * math.sqrt(self.hidden_size)
-            _input = self.pos_encoder(_input)
-            
-            curr_mask = torch.ones((seq_len,seq_len), dtype=torch.bool, device=_input.device)
-            curr_mask = torch.triu(curr_mask, diagonal=1)
-            _device = _input.device
-            rnn_output, _ = self.rnn(_input, _input, _input, attn_mask=curr_mask)
-        else:
-            rnn_output, _ = self.rnn(_input)   # seq len x batch size x hidden dim 
+        self.rnn.flatten_parameters()
+        rnn_output, _ = self.rnn(_input)   # seq len x batch size x hidden dim 
         
         #rnn_output = torch.reshape(rnn_output, (batch_size, self.hidden_size, seq_len))
         #rnn_output = self.batch_norm(rnn_output)
@@ -82,7 +70,7 @@ class TensorCodec:
         input_size: list of list that saves the size of inputs of all levels for each mode,
         order x k 
     '''
-    def __init__(self, input_mat, rank, input_size, hidden_size, device, model_type):
+    def __init__(self, input_mat, rank, input_size, hidden_size, device):
         # Intialize parameters
         self.input_mat = input_mat
         self.input_size = input_size
@@ -91,7 +79,7 @@ class TensorCodec:
         self.hidden_size = hidden_size
         self.device = device
         self.i_device = torch.device("cuda:" + str(self.device[0]))
-        self.model = rnn_model(rank, input_size, hidden_size, model_type)
+        self.model = rnn_model(rank, input_size, hidden_size)
         self.model.double()     
         if len(self.device) > 1:
             self.model = nn.DataParallel(self.model, device_ids = self.device)                        
@@ -127,8 +115,8 @@ class TensorCodec:
             self.bases_list[i] = torch.tensor(self.bases_list[i], dtype=torch.long, device=self.i_device)  # order x k
         self._add = torch.tensor(self._add, dtype=torch.long, device=self.i_device).unsqueeze(0)                
         self.comp_size =  sum(p.numel() for p in self.model.parameters() if p.requires_grad) * 8
-        for i in range(self.order):
-            self.comp_size += math.ceil(self.input_mat.src_dims[i] * math.ceil(math.log(self.input_mat.src_dims[i], 2)) / 8)
+        #for i in range(self.order):
+        #    self.comp_size += math.ceil(self.input_mat.src_dims[i] * math.ceil(math.log(self.input_mat.src_dims[i], 2)) / 8)
         print(f"Compressed size:{self.comp_size} bytes")
         # model -> matrix
         self.perm_list = [torch.tensor(list(range(self.input_mat.dims[i])), dtype=torch.long, device=self.i_device) for i in range(self.order)]
@@ -155,7 +143,7 @@ class TensorCodec:
         
     # minibatch L2 loss
     # samples: indices of sampled matrix entries
-    def L2_minibatch_loss(self, is_train, batch_size, samples):
+    def L2_loss(self, is_train, batch_size, samples):
         return_loss, minibatch_norm = 0., 0.
         num_sample = samples.shape[0]
         # Indices of sampled matrix entries        
@@ -177,4 +165,4 @@ class TensorCodec:
             minibatch_norm += torch.square(vals).sum().item()
             
             if is_train: curr_loss.backward()
-        return math.sqrt(return_loss), math.sqrt(minibatch_norm)
+        return return_loss, minibatch_norm

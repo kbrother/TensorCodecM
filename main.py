@@ -5,7 +5,7 @@ from tqdm import tqdm
 import math
 import sys
 from model import TensorCodec
-from data import _mat
+from data import tensor
 import copy
 import time
 
@@ -22,12 +22,13 @@ def test_perm(n_model, args):
                 
         print(f'our loss: {curr_loss}, real loss:{n_model.L2_loss(False, args.batch_size)}')
         
+        
 def train_model(n_model, args):
     device = torch.device("cuda:" + str(args.device[0]))   
     max_fit = -sys.float_info.max
     prev_fit = -1
     n_model.model.train()
-    minibatch_size = n_model.input_mat.real_num_entries // args.num_batch
+    minibatch_size = n_model.input_mat.num_train // args.num_batch
     
     with open(args.save_path + ".txt", 'a') as lossfile:
         lossfile.write(f'compressed size: {n_model.comp_size} bytes\n')    
@@ -37,50 +38,53 @@ def train_model(n_model, args):
     for epoch in range(args.epoch): 
         optimizer = torch.optim.Adam(n_model.model.parameters(), lr=args.lr/args.num_batch) 
         n_model.model.train()               
-        curr_order = np.random.permutation(n_model.input_mat.real_num_entries)            
-        for i in tqdm(range(0, n_model.input_mat.real_num_entries, minibatch_size)):
-            if n_model.input_mat.real_num_entries - i < minibatch_size: 
-                curr_batch_size = n_model.input_mat.real_num_entries - i
+        curr_order = np.random.permutation(n_model.input_mat.num_train)            
+        for i in tqdm(range(0, n_model.input_mat.num_train, minibatch_size)):
+            if n_model.input_mat.num_train - i < minibatch_size: 
+                curr_batch_size = n_model.input_mat.num_train - i
             else: curr_batch_size = minibatch_size
-            samples = curr_order[i:i+curr_batch_size]
+            samples = n_model.input_mat.src_train_idx[curr_order[i:i+curr_batch_size]]
             
             optimizer.zero_grad()
-            mini_loss, mini_norm = n_model.L2_minibatch_loss(True, args.batch_size, samples)
+            mini_loss, mini_norm = n_model.L2_loss(True, args.batch_size, samples)
             optimizer.step() 
-        
-        n_model.model.eval()
-        for _dim in range(n_model.order):
-            n_model.change_permutation(args.batch_size, _dim)
-                        
+                         
         with torch.no_grad():
             n_model.model.eval()
-            curr_loss = n_model.L2_loss(False, args.batch_size)
-            curr_fit = 1 - math.sqrt(curr_loss)/n_model.input_mat.norm
+            train_loss, train_norm = n_model.L2_loss(False, args.batch_size, n_model.input_mat.src_train_idx)
+            #val_loss, val_norm = n_model.L2_loss(False, args.batch_size, n_model.input_mat.src_valid_idx)
             
-            if prev_fit + 1e-4 <= curr_fit: 
-                tol_count = 0
-                prev_fit = curr_fit
-            else: tol_count += 1
-                
-            if max_fit < curr_fit:
-                max_fit = curr_fit                
+            train_fit = 1 - math.sqrt(train_loss) / math.sqrt(train_norm)
+            #val_fit = 1 - math.sqrt(val_loss) / math.sqrt(val_norm)                          
+            if max_fit < train_fit:
+                max_fit = train_fit                
                 prev_model = copy.deepcopy(n_model.model.state_dict())
-                torch.save({
-                    'epoch': epoch,
-                    'model_state_dict': prev_model,                    
-                    'loss': curr_fit,
-                    'perm': n_model.perm_list
-                }, args.save_path + ".pt")
-            
+          
         with open(args.save_path + ".txt", 'a') as lossfile:
-            lossfile.write(f'epoch:{epoch}, current fitness: {curr_fit}\n')    
-            print(f'epoch:{epoch}, current fitness: {curr_fit}\n')                        
-        if tol_count >= args.tol: break
+            lossfile.write(f'epoch:{epoch}, train loss: {train_fit}\n')    
+            print(f'epoch:{epoch}, train loss: {train_fit}')     
+                   
+        #if tol_count >= args.tol: break
     
+    n_model.model.load_state_dict(prev_model)
+    with torch.no_grad():
+        test_loss, test_norm = n_model.L2_loss(False, args.batch_size, n_model.input_mat.src_test_idx)
+        
+        test_fit = 1 - math.sqrt(test_loss) / math.sqrt(test_norm)
+        with open(args.save_path + ".txt", 'a') as lossfile:
+            lossfile.write(f'test loss: {test_fit}\n')    
+            print(f' test loss: {test_fit}\n')
+    
+    torch.save({
+        'model_state_dict': prev_model,
+        'loss': max_fit,
+    }, args.save_path + ".pt")
+            
     end_time = time.time()
     with open(args.save_path + ".txt", 'a') as lossfile:
         lossfile.write(f'running time: {end_time - start_time}\n')    
     print(f'running time: {end_time - start_time}')
+    
     
 def test(n_model, args):
     _device = torch.device("cuda:" + str(args.device[0]))     
@@ -96,14 +100,16 @@ def test(n_model, args):
         print(f"saved loss: {checkpoint['loss']}, computed loss: {1 - math.sqrt(curr_loss) / n_model.input_mat.norm}")
     
             
-# python TensorCodec/main.py train -d uber -de 0 1 2 3 -rk 7 -hs 9 -sp output/uber1_r7_h9 -e 5000 -lr 1e-1 -m gru -nb 100 -t 100 -b 8388608
+# python main.py train -p ../data/flowers/flowers -d flowers -de 0 1 2 3 -rk 16 -hs 17 -sp results/flowers_r16_h17 -e 500 -lr 1e-1 -b 8388608 -sr 0.2
+# python main.py train -p ../data/hsv/hsv -d hsv -de 0 1 2 3 -rk 16 -hs 17 -sp results/hsv_r16_h17 -e 500 -lr 1e-1 -b 8388608 -sr 0.05
 # python main.py check_sum -d uber -de 0 1 2 3 -rk 5 -hs 10 
 # python main.py test -d action -de 0 1 2 3 -rk 6 -hs 8 
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument('action', type=str, help='train')
     parser.add_argument("-d", "--dataset", type=str)   
-            
+    parser.add_argument("-p", "--input_path", type=str)
+    
     parser.add_argument(
         "-de", "--device",
         action="store", nargs='+', type=int
@@ -121,7 +127,7 @@ if __name__ == '__main__':
     
     parser.add_argument(
         "-e", "--epoch",
-        action="store", default=2000, type=int
+        action="store", default=500, type=int
     )
     
     parser.add_argument(
@@ -131,7 +137,7 @@ if __name__ == '__main__':
     
     parser.add_argument(
         "-nb", "--num_batch",
-        action="store", default=20, type=int
+        action="store", default=100, type=int
     )
     
     parser.add_argument(
@@ -149,42 +155,29 @@ if __name__ == '__main__':
         action="store", default=11, type=int
     )
     
+    '''
     parser.add_argument(
         "-t", "--tol", 
         action="store", default=10, type=int
+    )  
+    '''
+    parser.add_argument(
+        "-sr", "--sample_ratio",
+        action="store", default=0.1, type=float
     )
-    
-    
+        
     args = parser.parse_args()      
     # decompsress m_list and n_list
-    with open("TensorCodec/input_size/" + args.dataset + ".txt") as f:
+    with open("input_size/" + args.dataset + ".txt") as f:
         lines = f.read().split("\n")
         input_size = [[int(word) for word in line.split()] for line in lines if line]        
      
-    input_mat = _mat(input_size, "input/" + args.dataset + ".npy", args.device[0])        
+    input_mat = tensor(input_size, args.input_path, args.sample_ratio, args.device[0])        
     #input_mat = _mat(input_size, "input/23-NeuTT/" + args.dataset + ".npy", args.device[0])        
     #input_mat = _mat(input_size, "data/" + args.dataset + ".npy", args.device[0])        
     print("load finish")
     if args.action == "train":
-        n_model = TensorCodec(input_mat, args.rank, input_size, args.hidden_size, args.device, args.model)
-        train_model(n_model, args)
-    elif args.action == "test":
-        n_model = TensorCodec(input_mat, args.rank, input_size, args.hidden_size, args.device, args.model)
-        test(n_model, args)        
-    elif args.action == "test_perm":
-        n_model = TensorCodec(input_mat, args.rank, input_size, args.hidden_size, args.device, args.model)      
-        test_perm(n_model, args)      
-    elif args.action == "check_sum":
-        n_model = TensorCodec(input_mat, args.rank, input_size, args.hidden_size, args.device, args.model)        
-        k = len(input_size[0])
-        first_mat = np.ones((1, args.rank))
-        middle_mat = np.ones((args.rank, args.rank))
-        final_mat = np.ones((args.rank, 1))
-        
-        gt_result = first_mat
-        for i in range(k-2):
-            gt_result = np.matmul(gt_result, middle_mat)
-        gt_result = np.matmul(gt_result, final_mat)
-        print(f'model sum: {n_model.entry_sum(args.batch_size)}, gt result: {gt_result.item()}')
+        n_model = TensorCodec(input_mat, args.rank, input_size, args.hidden_size, args.device)
+        train_model(n_model, args)    
     else:
         assert(False)
