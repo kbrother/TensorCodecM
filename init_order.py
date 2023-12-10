@@ -5,6 +5,7 @@ import time
 import argparse
 from tqdm import tqdm
 
+# z: j_i x j_1*...*j_d
 def loss_fn(z, batch_size=-1):
     rets = []
     total_avg = torch.sum(z) / torch.count_nonzero(z)
@@ -22,7 +23,7 @@ def loss_fn(z, batch_size=-1):
         empty_entry = torch.logical_and(_from == 0, _to != 0)   # bsize x j1*...*j_d
         if torch.sum(empty_entry) > 0:
             empty_idx = torch.nonzero(empty_entry)   # nnz x 2
-            curr_row = (j + empty_idx[:,0]) // z.shape[0]
+            curr_row = j + empty_idx[:,0]
             fill_in_val = 0.5 * (mat_avg_row[curr_row] + mat_avg_col[empty_idx[:, 1]])
             _from[empty_idx[:, 0], empty_idx[:, 1]] = fill_in_val
 
@@ -30,12 +31,13 @@ def loss_fn(z, batch_size=-1):
         empty_entry = torch.logical_and(_from != 0, _to == 0)
         if torch.sum(empty_entry) > 0:
             empty_idx = torch.nonzero(empty_entry)
-            curr_row = (j + empty_idx[:,0]) % z.shape[0]
+            curr_row = j + empty_idx[:,0]
             fill_in_val = 0.5 * (mat_avg_row[curr_row] + mat_avg_col[empty_idx[:, 1]])
             _to[empty_idx[:, 0], empty_idx[:, 1]] = fill_in_val
 
-        num_cup = torch.sum(torch.logical_or(_from != 0, _to != 0))
+        num_cup = torch.sum(torch.logical_or(_from != 0, _to != 0), dim=-1)
         _dist = (_from - _to).pow(2).sum(-1).pow(0.5) * torch.sqrt(z.shape[1]/num_cup) 
+        _dist[_dist.isnan()] = 0
         
         rets.append(_dist)
     return torch.cat(rets, dim=-1)
@@ -76,9 +78,7 @@ def reorder(idx, vals, dims, device):
             mat_avg_col[nnz_cnt_col == 0] = total_avg
             
             batch_size = (mxsz // mat.shape[-1])           
-
             adj = torch.zeros(mat.shape[0] * mat.shape[0]).to(device).double()
-            zero_sum = 0
             for j in tqdm(range(0, mat.shape[0] * mat.shape[0], batch_size)):
                 bsize = min(batch_size, mat.shape[0] * mat.shape[0] - j)
                 _idx = j + torch.arange(bsize, dtype=torch.long)                
@@ -100,28 +100,25 @@ def reorder(idx, vals, dims, device):
                     fill_in_val = 0.5 * (mat_avg_row[curr_row] + mat_avg_col[empty_idx[:, 1]])
                     _to[empty_idx[:, 0], empty_idx[:, 1]] = fill_in_val
 
-                num_cup = torch.sum(torch.logical_or(_from != 0, _to != 0))
-                assert(num_cup > 0)
+                num_cup = torch.sum(torch.logical_or(_from != 0, _to != 0), dim=-1)
+                #assert(torch.count_nonzero(num_cup) == bsize)
                 _dist = (_from - _to).pow(2).sum(-1).pow(0.5)         
                 adj[_idx] = _dist * torch.sqrt(mat.shape[1]/num_cup) 
-
+                adj[adj.isnan()] = 0
+            
             inf = adj.max() * 2 + 1
             adj = adj.view(mat.shape[0], mat.shape[0])
             dist = torch.ones(mat.shape[0], dtype=torch.double).to(device) * inf
             argdist = -torch.ones(mat.shape[0], dtype=torch.long).to(device)
             dist[0] = 0
-            mask = torch.zeros(mat.shape[0], dtype=torch.bool).to(device)
-            edges = []
-            mst_size = 0.
+            mask = torch.zeros(mat.shape[0], dtype=torch.bool).to(device)            
             tree_dict = {}
             for j in range(mat.shape[0]):
                 temp_dist = dist.clone()
                 temp_dist[mask] = inf
-                new_node = torch.argmin(temp_dist, dim=-1).item()
+                new_node = torch.argmin(temp_dist).item()
                 parent_node = argdist[new_node].item()
-                if parent_node >= 0:
-                    edges.append((new_node, parent_node))
-                    # mst_size += adj[new_node, parent_node].item()
+                if parent_node >= 0:                    
                     if parent_node not in tree_dict:
                         tree_dict[parent_node] = []
                     tree_dict[parent_node].append(new_node)
@@ -166,7 +163,7 @@ if __name__ == '__main__':
     test_set = np.load(args.load_path + "_test.npy")
     known_entry = np.concatenate((train_set, valid_set), axis=0)
 
-    order = len(known_entry.shape) - 1
+    order = known_entry.shape[1] - 1
     device = torch.device(f"cuda:{args.device}")
     idx, val = known_entry[:, :-1], known_entry[:, -1]
     
@@ -177,6 +174,7 @@ if __name__ == '__main__':
     inv_final_orders = []
     for i in range(order):
         final_orders[i] = np.array(final_orders[i])
+        print(f'order: {i}, mean: {np.mean(final_orders[i])}')
         inv_final_orders.append(np.copy(final_orders[i]))
     for i in range(order):
         inv_final_orders[i][final_orders[i]] = np.arange(args.dims[i])
