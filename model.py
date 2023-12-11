@@ -115,8 +115,8 @@ class TensorCodec:
             self.bases_list[i] = torch.tensor(self.bases_list[i], dtype=torch.long, device=self.i_device)  # order x k
         self._add = torch.tensor(self._add, dtype=torch.long, device=self.i_device).unsqueeze(0)                
         self.comp_size =  sum(p.numel() for p in self.model.parameters() if p.requires_grad) * 8
-        #for i in range(self.order):
-        #    self.comp_size += math.ceil(self.input_mat.src_dims[i] * math.ceil(math.log(self.input_mat.src_dims[i], 2)) / 8)
+        for i in range(self.order):
+            self.comp_size += math.ceil(self.input_mat.src_dims[i] * math.ceil(math.log(self.input_mat.src_dims[i], 2)) / 8)
         print(f"Compressed size:{self.comp_size} bytes")
         # model -> matrix
         self.perm_list = [torch.tensor(list(range(self.input_mat.dims[i])), dtype=torch.long, device=self.i_device) for i in range(self.order)]
@@ -142,19 +142,28 @@ class TensorCodec:
 
         
     # minibatch L2 loss
-    # samples: indices of sampled matrix entries
-    def L2_loss(self, is_train, batch_size, samples):
+    # samples: sample idx, batch size
+    def L2_loss(self, set_type, batch_size, samples):
         return_loss, minibatch_norm = 0., 0.
         num_sample = samples.shape[0]
         # Indices of sampled matrix entries        
         for i in range(0, num_sample, batch_size):
             with torch.no_grad():
                 curr_batch_size = min(batch_size, num_sample - i)
-                curr_ten_idx = samples[i:i+curr_batch_size]
-                vals = torch.tensor(self.input_mat.src_vals[curr_ten_idx], device=self.i_device)
+
+                if set_type == "train":
+                    curr_ten_idx = self.input_mat.src_train_idx[samples[i:i+curr_batch_size]]
+                    vals = torch.tensor(self.input_mat.src_train_vals[samples[i:i+curr_batch_size]], device=self.i_device)
+                elif set_type == "val":
+                    curr_ten_idx = self.input_mat.src_val_idx[samples[i:i+curr_batch_size]]
+                    vals = torch.tensor(self.input_mat.src_val_vals[samples[i:i+curr_batch_size]], device=self.i_device)
+                elif set_type == "test":
+                    curr_ten_idx = self.input_mat.src_test_idx[samples[i:i+curr_batch_size]]
+                    vals = torch.tensor(self.input_mat.src_test_vals[samples[i:i+curr_batch_size]], device=self.i_device)
+                else:
+                    raise ValueError("wrong input for the set type")
+                curr_ten_idx = torch.tensor(curr_ten_idx, device=self.i_device)                
                 
-                curr_ten_idx = torch.tensor(curr_ten_idx, device=self.i_device).unsqueeze(-1)
-                curr_ten_idx = curr_ten_idx // self.input_mat.src_base % self.input_mat.src_dims_gpu # batch size x self.order
                 curr_model_idx = curr_ten_idx.clone()                
                 for j in range(self.order):
                     curr_model_idx[:, j] = self.inv_perm_list[j][curr_ten_idx[:, j]]
@@ -164,5 +173,5 @@ class TensorCodec:
             return_loss += curr_loss.item()
             minibatch_norm += torch.square(vals).sum().item()
             
-            if is_train: curr_loss.backward()
+            if set_type == "train": curr_loss.backward()
         return return_loss, minibatch_norm

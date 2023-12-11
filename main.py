@@ -39,41 +39,42 @@ def train_model(n_model, args):
         optimizer = torch.optim.Adam(n_model.model.parameters(), lr=args.lr/args.num_batch) 
         n_model.model.train()               
         curr_order = np.random.permutation(n_model.input_mat.num_train)            
+        train_loss, train_norm = 0, 0
         for i in tqdm(range(0, n_model.input_mat.num_train, minibatch_size)):
-            if n_model.input_mat.num_train - i < minibatch_size: 
-                curr_batch_size = n_model.input_mat.num_train - i
-            else: curr_batch_size = minibatch_size
-            samples = n_model.input_mat.src_train_idx[curr_order[i:i+curr_batch_size]]
-            
+            curr_batch_size = min(n_model.input_mat.num_train - i, minibatch_size)            
+            #samples = n_model.input_mat.src_train_idx[curr_order[i:i+curr_batch_size]]            
+            samples = curr_order[i:i+curr_batch_size]
             optimizer.zero_grad()
-            mini_loss, mini_norm = n_model.L2_loss(True, args.batch_size, samples)
+            sub_train_loss, sub_train_norm = n_model.L2_loss("train", args.batch_size, samples)
+            train_loss += sub_train_loss
+            train_norm += sub_train_norm
             optimizer.step() 
-                         
+
+        train_fit = 1 - math.sqrt(train_loss) / math.sqrt(train_norm)
         with torch.no_grad():
             n_model.model.eval()
-            train_loss, train_norm = n_model.L2_loss(False, args.batch_size, n_model.input_mat.src_train_idx)
-            #val_loss, val_norm = n_model.L2_loss(False, args.batch_size, n_model.input_mat.src_valid_idx)
-            
-            train_fit = 1 - math.sqrt(train_loss) / math.sqrt(train_norm)
-            #val_fit = 1 - math.sqrt(val_loss) / math.sqrt(val_norm)                          
-            if max_fit < train_fit:
-                max_fit = train_fit                
+            val_loss, val_norm = n_model.L2_loss("val", args.batch_size, np.arange(n_model.input_mat.num_val))
+                        
+            val_fit = 1 - math.sqrt(val_loss) / math.sqrt(val_norm)                          
+            if max_fit < val_fit:
+                max_fit = val_fit     
+                max_epoch = epoch
                 prev_model = copy.deepcopy(n_model.model.state_dict())
           
         with open(args.save_path + ".txt", 'a') as lossfile:
-            lossfile.write(f'epoch:{epoch}, train loss: {train_fit}\n')    
-            print(f'epoch:{epoch}, train loss: {train_fit}')     
+            lossfile.write(f'epoch:{epoch}, train loss: {train_fit}, valid loss: {val_fit}\n')    
+            print(f'epoch:{epoch}, train loss: {train_fit}, valid loss: {val_fit}')     
                    
         #if tol_count >= args.tol: break
     
     n_model.model.load_state_dict(prev_model)
     with torch.no_grad():
-        test_loss, test_norm = n_model.L2_loss(False, args.batch_size, n_model.input_mat.src_test_idx)
+        test_loss, test_norm = n_model.L2_loss("test", args.batch_size, np.arange(n_model.input_mat.num_test))
         
         test_fit = 1 - math.sqrt(test_loss) / math.sqrt(test_norm)
         with open(args.save_path + ".txt", 'a') as lossfile:
-            lossfile.write(f'test loss: {test_fit}\n')    
-            print(f' test loss: {test_fit}\n')
+            lossfile.write(f'epoch: {epoch}, test loss: {test_fit}\n')    
+            print(f'epoch: {epoch}, test loss: {test_fit}\n')
     
     torch.save({
         'model_state_dict': prev_model,
@@ -100,7 +101,7 @@ def test(n_model, args):
         print(f"saved loss: {checkpoint['loss']}, computed loss: {1 - math.sqrt(curr_loss) / n_model.input_mat.norm}")
     
             
-# python main.py train -d ml -ip results/ml -de 0 1 2 3 -di 6040 3952 -rk 8 -hs 8 -sp results/ml
+# python main.py train -d ml -ip results/ml -de 0 1 2 3 -di 6040 3952 -rk 8 -hs 8 -sp results/ml_r8_h8
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument('action', type=str, help='train')
@@ -157,16 +158,6 @@ if __name__ == '__main__':
         action="store", default=11, type=int
     )
     
-    '''
-    parser.add_argument(
-        "-t", "--tol", 
-        action="store", default=10, type=int
-    )  
-    '''
-    parser.add_argument(
-        "-sr", "--sample_ratio",
-        action="store", default=0.1, type=float
-    )
         
     args = parser.parse_args()      
     # decompsress m_list and n_list
@@ -176,10 +167,9 @@ if __name__ == '__main__':
      
     input_mat = tensor(args.dims, input_size, args.input_path, args.device[0])        
     print("load finish")
-    '''
+    
     if args.action == "train":
         n_model = TensorCodec(input_mat, args.rank, input_size, args.hidden_size, args.device)
         train_model(n_model, args)    
     else:
         assert(False)
-    '''
