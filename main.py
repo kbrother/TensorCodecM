@@ -100,20 +100,22 @@ def test(n_model, args):
         print(f"saved loss: {checkpoint['loss']}, computed loss: {1 - math.sqrt(curr_loss) / n_model.input_mat.norm}")
     
             
-# python main.py train -p ../data/flowers/flowers -d flowers -de 0 1 2 3 -rk 16 -hs 17 -sp results/flowers_r16_h17 -e 500 -lr 1e-1 -b 8388608 -sr 0.2
-# python main.py train -p ../data/hsv/hsv -d hsv -de 0 1 2 3 -rk 16 -hs 17 -sp results/hsv_r16_h17 -e 500 -lr 1e-1 -b 8388608 -sr 0.05
-# python main.py check_sum -d uber -de 0 1 2 3 -rk 5 -hs 10 
-# python main.py test -d action -de 0 1 2 3 -rk 6 -hs 8 
+# python main.py train -d ml -ip results/ml -de 0 1 2 3 -di 6040 3952 -rk 8 -hs 8 -sp results/ml
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument('action', type=str, help='train')
     parser.add_argument("-d", "--dataset", type=str)   
-    parser.add_argument("-p", "--input_path", type=str)
+    parser.add_argument("-ip", "--input_path", type=str)
     
     parser.add_argument(
         "-de", "--device",
         action="store", nargs='+', type=int
     )    
+
+    parser.add_argument(
+        "-di", "--dims",
+        action="store", nargs='+', type=int
+    )
     
     parser.add_argument(
         "-rk", "--rank",
@@ -172,12 +174,12 @@ if __name__ == '__main__':
         lines = f.read().split("\n")
         input_size = [[int(word) for word in line.split()] for line in lines if line]        
      
-    input_mat = tensor(input_size, args.input_path, args.sample_ratio, args.device[0])        
-    #input_mat = _mat(input_size, "input/23-NeuTT/" + args.dataset + ".npy", args.device[0])        
-    #input_mat = _mat(input_size, "data/" + args.dataset + ".npy", args.device[0])        
+    input_mat = tensor(args.dims, input_size, args.input_path, args.device[0])        
     print("load finish")
+    '''
     if args.action == "train":
         n_model = TensorCodec(input_mat, args.rank, input_size, args.hidden_size, args.device)
         train_model(n_model, args)    
     else:
         assert(False)
+    '''
