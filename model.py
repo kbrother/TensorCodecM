@@ -198,7 +198,7 @@ class TensorCodec:
             # check the loss before switching
             pair2loss = torch.zeros(num_pair, device=self.i_device, dtype=torch.double)           
             curr_idx = 0
-            while tqdm(curr_idx < self.input_mat.num_train):
+            while curr_idx < self.input_mat.num_train:
                 # Compute thre current
                 curr_batch_size = min(self.input_mat.num_train - curr_idx, batch_size)
                 curr_ten_idx = self.input_mat.src_train_idx[curr_idx:curr_idx+curr_batch_size]      

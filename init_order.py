@@ -65,7 +65,7 @@ def reorder(idx, vals, dims, device):
         else:
             raise ValueError("need an additional implementation for a higher order tensor")    
 
-        mxsz = (1 << 27)
+        mxsz = (1 << 25)
         total_avg = torch.sum(input_tensor) / torch.count_nonzero(input_tensor)
         change_order, final_orders = [], []
         for i in range(order):
@@ -147,6 +147,7 @@ def reorder(idx, vals, dims, device):
 
 # python TensorCodec_completion/init_order.py -di 6040 3952 -de 0 -lp data/TensorCodec_journal/ml -sp TensorCodec_completion/results/ml
 # python TensorCodec_completion/init_order.py -di 5600 362 6 -de 0 -lp data/airquality_orig -sp TensorCodec_completion/results/airquality
+# python TensorCodec_completion/init_order.py -di 192 288 30 120 -de 0 -lp data/absorb_orig -sp TensorCodec_completion/results/absorb
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(

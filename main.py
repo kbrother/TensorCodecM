@@ -99,7 +99,8 @@ def train_model(n_model, args):
             
 # python main.py train -d ml -ip results/ml -de 0 1 2 3 -di 6040 3952 -rk 8 -hs 8 -sp results/ml_r8_h8_wor -lr 0.01 -e 500
 # python main.py test_perm -d ml -ip results/ml -de 0 1 2 3 -di 6040 3952 -rk 8 -hs 8
-# python main.py train -d airquality -ip results/airquality -de 0 1 2 3 -di 5600 362 6 -rk 8 -hs 8 -sp results/airquality_r8_h8 -lr 0.01 -e 500
+# python main.py train -d airquality -ip results/airquality -de 0 1 2 3 -di 5600 362 6 -rk 8 -hs 8 -sp results/airquality_r8_h8 -lr 0.1 -e 500
+# python main.py train -d absorb -ip results/absorb -de 0 1 2 3 -di 192 288 30 120 -rk 8 -hs 8 -sp results/absorb_r8_h8 -lr 0.1 -e 500
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument('action', type=str, help='train')
@@ -133,7 +134,7 @@ if __name__ == '__main__':
     
     parser.add_argument(
         "-b", "--batch_size",
-        action="store", default=2**24, type=int
+        action="store", default=2**21, type=int
     )
     
     parser.add_argument(
