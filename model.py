@@ -215,7 +215,7 @@ class TensorCodec:
                 print(pair_idx)
                 #curr_loss = curr_loss.cpu()
                 #pair_idx = pair_idx.cpu()
-                pair2loss = torch.scatter_reduce(-curr_loss, 0, pair_idx,  reduce="sum")                
+                pair2loss.scatter_reduce(0, pair_idx, -curr_loss, reduce="sum")                
 
                 # Compute the future loss
                 new_tidx = tidx2new_tidx[curr_ten_idx[:, mode]]
@@ -223,9 +223,9 @@ class TensorCodec:
                 curr_preds = self.predict(curr_model_idx)
                 curr_loss = torch.square(curr_preds - curr_vals)
                 pair_idx = tidx2pidx[new_tidx]
-                curr_loss = curr_loss.cpu()
-                pair_idx = pair_idx.cpu()
-                pair2loss = torch.scatter_reduce(curr_loss, 0, pair_idx, reduce="sum")                
+                #curr_loss = curr_loss.cpu()
+                #pair_idx = pair_idx.cpu()
+                pair2loss.scatter_reduce(0, pair_idx, curr_loss, reduce="sum")                
                 curr_idx += curr_batch_size
 
             valid_pair = pair2loss < 0
