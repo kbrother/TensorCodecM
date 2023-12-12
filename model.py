@@ -196,7 +196,7 @@ class TensorCodec:
             tidx2new_tidx[second_tidx] = first_tidx.clone()
 
             # check the loss before switching
-            pair2loss = torch.zeros(num_pair, device=self.i_device)           
+            pair2loss = torch.zeros(num_pair, device=self.i_device, dtype=torch.double)           
             curr_idx = 0
             while tqdm(curr_idx < self.input_mat.num_train):
                 # Compute thre current
@@ -211,11 +211,7 @@ class TensorCodec:
                 curr_vals = torch.tensor(self.input_mat.src_train_vals[curr_idx:curr_idx+curr_batch_size], device=self.i_device)                
                 curr_loss = torch.square(curr_preds - curr_vals)
                 pair_idx = tidx2pidx[curr_ten_idx[:, mode]]
-                print(curr_loss)
-                print(pair_idx)
-                #curr_loss = curr_loss.cpu()
-                #pair_idx = pair_idx.cpu()
-                pair2loss.scatter_reduce(0, pair_idx, -curr_loss, reduce="sum")                
+                pair2loss = pair2loss.scatter_reduce(0, pair_idx, -curr_loss, reduce="sum")                
 
                 # Compute the future loss
                 new_tidx = tidx2new_tidx[curr_ten_idx[:, mode]]
@@ -223,11 +219,10 @@ class TensorCodec:
                 curr_preds = self.predict(curr_model_idx)
                 curr_loss = torch.square(curr_preds - curr_vals)
                 pair_idx = tidx2pidx[new_tidx]
-                #curr_loss = curr_loss.cpu()
-                #pair_idx = pair_idx.cpu()
-                pair2loss.scatter_reduce(0, pair_idx, curr_loss, reduce="sum")                
+                pair2loss = pair2loss.scatter_reduce(0, pair_idx, curr_loss, reduce="sum")                
                 curr_idx += curr_batch_size
 
+            #print(pair2loss)
             valid_pair = pair2loss < 0
             delta_loss = torch.sum(pair2loss[valid_pair]).item()
             first_tidx, second_tidx = first_tidx[valid_pair], second_tidx[valid_pair]
