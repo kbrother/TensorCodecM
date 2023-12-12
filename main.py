@@ -101,6 +101,7 @@ def train_model(n_model, args):
 # python main.py test_perm -d ml -ip results/ml -de 0 1 2 3 -di 6040 3952 -rk 8 -hs 8
 # python main.py train -d airquality -ip results/airquality -de 0 1 2 3 -di 5600 362 6 -rk 8 -hs 8 -sp results/airquality_r8_h8 -lr 0.1 -e 500
 # python main.py train -d absorb -ip results/absorb -de 0 1 2 3 -di 192 288 30 120 -rk 8 -hs 8 -sp results/absorb_r8_h8 -lr 0.1 -e 500
+# python main.py train -d pems -ip results/pems -de 0 1 2 3 -di 963 144 440 -rk 8 -hs 8 -sp results/pems_r8_h8 -lr 0.1 -e 500
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument('action', type=str, help='train')

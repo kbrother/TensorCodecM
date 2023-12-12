@@ -186,7 +186,7 @@ class TensorCodec:
             tidx = torch.randperm(self.input_mat.src_dims[mode], device=self.i_device)
             first_tidx, second_tidx = tidx[:num_pair], tidx[num_pair:]
             if self.input_mat.src_dims[mode] % 2 == 1:
-                second_idx = torch.cat([second_tidx, first_tidx[-1].clone()]) 
+                second_tidx = torch.cat([second_tidx, torch.tensor([first_tidx[-1].item()], device=self.i_device)]) 
             
             tidx2pidx = torch.arange(self.input_mat.src_dims[mode], device=self.i_device)
             tidx2pidx[first_tidx] = torch.arange(num_pair, device=self.i_device)
