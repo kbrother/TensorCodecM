@@ -41,6 +41,8 @@ def train_model(n_model, args):
         optimizer = torch.optim.Adam(n_model.model.parameters(), lr=args.lr/args.num_batch) 
         n_model.model.train()               
         curr_order = np.random.permutation(n_model.input_mat.num_train)            
+        
+        # Gradietn descent
         train_loss, train_norm = 0, 0
         for i in tqdm(range(0, n_model.input_mat.num_train, minibatch_size)):
             curr_batch_size = min(n_model.input_mat.num_train - i, minibatch_size)            
@@ -52,9 +54,15 @@ def train_model(n_model, args):
             train_norm += sub_train_norm
             optimizer.step() 
 
+        
+        # Reordering
+        n_model.model.eval()
+        for j in range(n_model.input_mat.order):
+            delta_loss = n_model.reordering(j, args.batch_size)
+            train_loss += delta_loss
+            
         train_fit = 1 - math.sqrt(train_loss) / math.sqrt(train_norm)
         with torch.no_grad():
-            n_model.model.eval()
             val_loss, val_norm = n_model.L2_loss(False, "val", args.batch_size, np.arange(n_model.input_mat.num_val))
                         
             val_fit = 1 - math.sqrt(val_loss) / math.sqrt(val_norm)                          
