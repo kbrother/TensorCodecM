@@ -60,7 +60,7 @@ def train_model(n_model, args):
         for j in range(n_model.input_mat.order):
             delta_loss = n_model.reordering(j, args.batch_size)
             train_loss += delta_loss
-            
+        
         train_fit = 1 - math.sqrt(train_loss) / math.sqrt(train_norm)
         with torch.no_grad():
             val_loss, val_norm = n_model.L2_loss(False, "val", args.batch_size, np.arange(n_model.input_mat.num_val))
@@ -83,8 +83,8 @@ def train_model(n_model, args):
         
         test_fit = 1 - math.sqrt(test_loss) / math.sqrt(test_norm)
         with open(args.save_path + ".txt", 'a') as lossfile:
-            lossfile.write(f'epoch: {epoch}, test loss: {test_fit}\n')    
-            print(f'epoch: {epoch}, test loss: {test_fit}\n')
+            lossfile.write(f'epoch: {max_epoch}, test loss: {test_fit}\n')    
+            print(f'epoch: {max_epoch}, test loss: {test_fit}\n')
     
     torch.save({
         'model_state_dict': prev_model,
@@ -97,8 +97,9 @@ def train_model(n_model, args):
     print(f'running time: {end_time - start_time}')
     
             
-# python main.py train -d ml -ip results/ml -de 0 1 2 3 -di 6040 3952 -rk 8 -hs 8 -sp results/ml_r8_h8 -lr 0.1 -e 50
+# python main.py train -d ml -ip results/ml -de 0 1 2 3 -di 6040 3952 -rk 8 -hs 8 -sp results/ml_r8_h8_wor -lr 0.01 -e 500
 # python main.py test_perm -d ml -ip results/ml -de 0 1 2 3 -di 6040 3952 -rk 8 -hs 8
+# python main.py train -d airquality -ip results/airquality -de 0 1 2 3 -di 5600 362 6 -rk 8 -hs 8 -sp results/airquality_r8_h8 -lr 0.01 -e 500
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument('action', type=str, help='train')
@@ -132,7 +133,7 @@ if __name__ == '__main__':
     
     parser.add_argument(
         "-b", "--batch_size",
-        action="store", default=2**22, type=int
+        action="store", default=2**24, type=int
     )
     
     parser.add_argument(

@@ -146,6 +146,7 @@ def reorder(idx, vals, dims, device):
     return change_order, final_orders
 
 # python TensorCodec_completion/init_order.py -di 6040 3952 -de 0 -lp data/TensorCodec_journal/ml -sp TensorCodec_completion/results/ml
+# python TensorCodec_completion/init_order.py -di 5600 362 6 -de 0 -lp data/airquality_orig -sp TensorCodec_completion/results/airquality
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(
