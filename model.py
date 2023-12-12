@@ -118,9 +118,9 @@ class TensorCodec:
         for i in range(self.order):
             self.comp_size += math.ceil(self.input_mat.src_dims[i] * math.ceil(math.log(self.input_mat.src_dims[i], 2)) / 8)
         print(f"Compressed size:{self.comp_size} bytes")
-        # model -> matrix
+        # model -> tensor
         self.perm_list = [torch.tensor(list(range(self.input_mat.dims[i])), dtype=torch.long, device=self.i_device) for i in range(self.order)]
-        # matrix -> model
+        # tensor -> model
         self.inv_perm_list = [torch.tensor(list(range(self.input_mat.dims[i])), dtype=torch.long, device=self.i_device) for i in range(self.order)]
     
     
@@ -143,7 +143,7 @@ class TensorCodec:
         
     # minibatch L2 loss
     # samples: sample idx, batch size
-    def L2_loss(self, set_type, batch_size, samples):
+    def L2_loss(self, need_bp, set_type, batch_size, samples):
         return_loss, minibatch_norm = 0., 0.
         num_sample = samples.shape[0]
         # Indices of sampled matrix entries        
@@ -173,5 +173,66 @@ class TensorCodec:
             return_loss += curr_loss.item()
             minibatch_norm += torch.square(vals).sum().item()
             
-            if set_type == "train": curr_loss.backward()
+            if need_bp: curr_loss.backward()
         return return_loss, minibatch_norm
+
+
+    def reordering(self, mode, batch_size):        
+        # tensor -> model need to be changed
+        # chech whether the loss decreases         
+        with torch.no_grad():
+            #preprocess
+            num_pair = math.ceil(self.input_mat.src_dims[mode]/2)
+            tidx = torch.randperm(self.input_mat.src_dims[mode], device=self.i_device)
+            first_tidx, second_tidx = tidx[:num_pair], tidx[num_pair:]
+            if self.input_mat.src_dims[mode] % 2 == 1:
+                second_idx = torch.cat([second_tidx, first_tidx[-1].clone()]) 
+            
+            tidx2pidx = torch.arange(self.input_mat.src_dims[mode], device=self.i_device)
+            tidx2pidx[first_tidx] = torch.arange(num_pair, device=self.i_device)
+            tidx2pidx[second_tidx] = torch.arange(num_pair, device=self.i_device)            
+            tidx2new_tidx = torch.arange(self.input_mat.src_dims[mode], device=self.i_device)
+            tidx2new_tidx[first_tidx] = second_tidx.clone()
+            tidx2new_tidx[second_tidx] = first_tidx.clone()
+
+            # check the loss before switching
+            pair2loss = torch.zeros(num_pair, device=self.i_device)           
+            curr_idx = 0
+            while tqdm(curr_idx < self.input_mat.num_train):
+                # Compute thre current
+                curr_batch_size = min(self.input_mat.num_train - curr_idx, batch_size)
+                curr_ten_idx = self.input_mat.src_train_idx[curr_idx:curr_idx+curr_batch_size]      
+                curr_ten_idx = torch.tensor(curr_ten_idx, device=self.i_device)
+                curr_model_idx = curr_ten_idx.clone()
+                for j in range(self.order):
+                    curr_model_idx[:, j] = self.inv_perm_list[j][curr_ten_idx[:, j]]
+
+                curr_preds = self.predict(curr_model_idx)
+                curr_vals = torch.tensor(self.input_mat.src_train_vals[curr_idx:curr_idx+curr_batch_size], device=self.i_device)                
+                curr_loss = torch.square(curr_preds - curr_vals)
+                pair_idx = tidx2pidx[curr_ten_idx[:, mode]]
+                print(curr_loss)
+                print(pair_idx)
+                #curr_loss = curr_loss.cpu()
+                #pair_idx = pair_idx.cpu()
+                pair2loss = torch.scatter_reduce(-curr_loss, 0, pair_idx,  reduce="sum")                
+
+                # Compute the future loss
+                new_tidx = tidx2new_tidx[curr_ten_idx[:, mode]]
+                curr_model_idx[:, mode] = self.inv_perm_list[mode][new_tidx]
+                curr_preds = self.predict(curr_model_idx)
+                curr_loss = torch.square(curr_preds - curr_vals)
+                pair_idx = tidx2pidx[new_tidx]
+                curr_loss = curr_loss.cpu()
+                pair_idx = pair_idx.cpu()
+                pair2loss = torch.scatter_reduce(curr_loss, 0, pair_idx, reduce="sum")                
+                curr_idx += curr_batch_size
+
+            valid_pair = pair2loss < 0
+            delta_loss = torch.sum(pair2loss[valid_pair]).item()
+            first_tidx, second_tidx = first_tidx[valid_pair], second_tidx[valid_pair]
+            prev_inv_perm = self.inv_perm_list[mode].clone()
+            self.inv_perm_list[mode][first_tidx] = prev_inv_perm[second_tidx]
+            self.inv_perm_list[mode][second_tidx] = prev_inv_perm[first_tidx]
+        
+        return delta_loss

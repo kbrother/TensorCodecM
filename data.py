@@ -35,4 +35,4 @@ class tensor:
         device = torch.device("cuda:" + str(device))
         self.src_base = torch.tensor(self.src_base, dtype=torch.long, device=device)
         self.src_dims_gpu = torch.tensor(self.src_dims, dtype=torch.long, device=device)        
-        self.dims = torch.tensor(self.dims, dtype=torch.long, device=device)                
+        self.dims = torch.tensor(self.dims, dtype=torch.long, device=device)       

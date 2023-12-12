@@ -10,17 +10,19 @@ import copy
 import time
 
 def test_perm(n_model, args):
+    n_model.model.eval()
     with torch.no_grad():
-        n_model.model.eval()
-        curr_loss = n_model.L2_loss(False, args.batch_size)
-        print(f'initial loss: {curr_loss}')        
-        for i in range(1):
-            for j in range(4):
-                delta_loss = n_model.change_permutation(args.batch_size, j)
-                curr_loss += delta_loss
-                print(delta_loss)
-                
-        print(f'our loss: {curr_loss}, real loss:{n_model.L2_loss(False, args.batch_size)}')
+        samples = np.arange(n_model.input_mat.num_train)
+        curr_loss, _ = n_model.L2_loss(False, "train", args.batch_size, samples)
+
+    print(f'initial loss: {curr_loss}')
+    for j in range(n_model.input_mat.order):
+        delta_loss = n_model.reordering(j, args.batch_size)
+        curr_loss += delta_loss
+
+    with torch.no_grad():
+        real_loss, _ = n_model.L2_loss(False, "train", args.batch_size, samples)
+        print(f'our loss: {curr_loss}, real loss:{real_loss}')
         
         
 def train_model(n_model, args):
@@ -45,7 +47,7 @@ def train_model(n_model, args):
             #samples = n_model.input_mat.src_train_idx[curr_order[i:i+curr_batch_size]]            
             samples = curr_order[i:i+curr_batch_size]
             optimizer.zero_grad()
-            sub_train_loss, sub_train_norm = n_model.L2_loss("train", args.batch_size, samples)
+            sub_train_loss, sub_train_norm = n_model.L2_loss(True, "train", args.batch_size, samples)
             train_loss += sub_train_loss
             train_norm += sub_train_norm
             optimizer.step() 
@@ -53,7 +55,7 @@ def train_model(n_model, args):
         train_fit = 1 - math.sqrt(train_loss) / math.sqrt(train_norm)
         with torch.no_grad():
             n_model.model.eval()
-            val_loss, val_norm = n_model.L2_loss("val", args.batch_size, np.arange(n_model.input_mat.num_val))
+            val_loss, val_norm = n_model.L2_loss(False, "val", args.batch_size, np.arange(n_model.input_mat.num_val))
                         
             val_fit = 1 - math.sqrt(val_loss) / math.sqrt(val_norm)                          
             if max_fit < val_fit:
@@ -69,7 +71,7 @@ def train_model(n_model, args):
     
     n_model.model.load_state_dict(prev_model)
     with torch.no_grad():
-        test_loss, test_norm = n_model.L2_loss("test", args.batch_size, np.arange(n_model.input_mat.num_test))
+        test_loss, test_norm = n_model.L2_loss(False, "test", args.batch_size, np.arange(n_model.input_mat.num_test))
         
         test_fit = 1 - math.sqrt(test_loss) / math.sqrt(test_norm)
         with open(args.save_path + ".txt", 'a') as lossfile:
@@ -86,22 +88,9 @@ def train_model(n_model, args):
         lossfile.write(f'running time: {end_time - start_time}\n')    
     print(f'running time: {end_time - start_time}')
     
-    
-def test(n_model, args):
-    _device = torch.device("cuda:" + str(args.device[0]))     
-    checkpoint = torch.load(args.load_path , map_location = _device)
-    n_model.model.load_state_dict(checkpoint['model_state_dict'])          
-    n_model.perm_list = checkpoint['perm']     
-    for i in range(n_model.order):
-        n_model.inv_perm_list[i][n_model.perm_list[i]] = torch.arange(n_model.input_mat.dims[i], device=_device)
-    
-    n_model.model.eval()
-    with torch.no_grad():
-        curr_loss = n_model.L2_loss(False, args.batch_size)
-        print(f"saved loss: {checkpoint['loss']}, computed loss: {1 - math.sqrt(curr_loss) / n_model.input_mat.norm}")
-    
             
 # python main.py train -d ml -ip results/ml -de 0 1 2 3 -di 6040 3952 -rk 8 -hs 8 -sp results/ml_r8_h8 -lr 0.1 -e 50
+# python main.py test_perm -d ml -ip results/ml -de 0 1 2 3 -di 6040 3952 -rk 8 -hs 8
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument('action', type=str, help='train')
@@ -167,9 +156,11 @@ if __name__ == '__main__':
      
     input_mat = tensor(args.dims, input_size, args.input_path, args.device[0])        
     print("load finish")
-    
-    if args.action == "train":
-        n_model = TensorCodec(input_mat, args.rank, input_size, args.hidden_size, args.device)
+
+    n_model = TensorCodec(input_mat, args.rank, input_size, args.hidden_size, args.device)
+    if args.action == "train":        
         train_model(n_model, args)    
+    elif args.action == "test_perm":
+        test_perm(n_model, args)
     else:
         assert(False)
