@@ -57,23 +57,27 @@ def train_model(n_model, args):
         
         # Reordering
         n_model.model.eval()
+        '''
         for j in range(n_model.input_mat.order):
             delta_loss = n_model.reordering(j, args.batch_size)
             train_loss += delta_loss
+        '''
         
         train_fit = 1 - math.sqrt(train_loss) / math.sqrt(train_norm)
         with torch.no_grad():
             val_loss, val_norm = n_model.L2_loss(False, "val", args.batch_size, np.arange(n_model.input_mat.num_val))
-                        
-            val_fit = 1 - math.sqrt(val_loss) / math.sqrt(val_norm)                          
+            test_loss, test_norm = n_model.L2_loss(False, "test", args.batch_size, np.arange(n_model.input_mat.num_test))
+            test_fit = math.sqrt(test_loss)
+            val_fit = math.sqrt(val_loss) 
+            
             if max_fit < val_fit:
                 max_fit = val_fit     
                 max_epoch = epoch
                 prev_model = copy.deepcopy(n_model.model.state_dict())
           
         with open(args.save_path + ".txt", 'a') as lossfile:
-            lossfile.write(f'epoch:{epoch}, train loss: {train_fit}, valid loss: {val_fit}\n')    
-            print(f'epoch:{epoch}, train loss: {train_fit}, valid loss: {val_fit}')     
+            lossfile.write(f'epoch:{epoch}, train loss: {train_fit}, valid loss: {val_fit}, test loss: {test_fit}\n')    
+            print(f'epoch:{epoch}, train loss: {train_fit}, valid loss: {val_fit}, test loss: {test_fit}')     
                    
         #if tol_count >= args.tol: break
     
@@ -98,7 +102,7 @@ def train_model(n_model, args):
     
             
 # python main.py train -d ml -ip results/ml -de 0 1 2 3 -di 6040 3952 -rk 8 -hs 8 -sp results/ml_r8_h8_wor -lr 0.01 -e 500
-# python main.py test_perm -d ml -ip results/ml -de 0 1 2 3 -di 6040 3952 -rk 8 -hs 8
+# python main.py test_perm -d pems -ip results/pems -de 0 1 2 3 -di 963 144 440 -rk 8 -hs 8
 # python main.py train -d airquality -ip results/airquality -de 0 1 2 3 -di 5600 362 6 -rk 8 -hs 8 -sp results/airquality_r8_h8 -lr 0.1 -e 500
 # python main.py train -d absorb -ip results/absorb -de 0 1 2 3 -di 192 288 30 120 -rk 8 -hs 8 -sp results/absorb_r8_h8 -lr 0.1 -e 500
 # python main.py train -d pems -ip results/pems -de 0 1 2 3 -di 963 144 440 -rk 8 -hs 8 -sp results/pems_r8_h8 -lr 0.1 -e 500
