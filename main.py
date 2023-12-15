@@ -101,7 +101,7 @@ def train_model(n_model, args):
     print(f'running time: {end_time - start_time}')
     
             
-# python main.py train -d uber -ip ../data/uber -k 5 -de 0 1 2 3 
+# python main.py train -d uber -ip ../data/uber -k 5 -de 0 1 2 3 -hs 8 -r 8
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument('action', type=str, help='train')
@@ -164,8 +164,9 @@ if __name__ == '__main__':
     input_mat = tensor(input_size, args.input_path, args.device[0], args.known_entry)        
     print("load finish")
 
+    n_model = TensorCodec(input_mat, args.rank, input_size, 
+                          args.hidden_size, args.device, args)
     '''
-    n_model = TensorCodec(input_mat, args.rank, input_size, args.hidden_size, args.device, args.known_entry)
     if args.action == "train":        
         train_model(n_model, args)    
     elif args.action == "test_perm":

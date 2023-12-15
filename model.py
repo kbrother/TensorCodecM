@@ -5,6 +5,7 @@ import math
 import numpy as np
 import random
 import copy
+import pickle
 
 # Model
 class rnn_model(torch.nn.Module):
@@ -70,7 +71,7 @@ class TensorCodec:
         input_size: list of list that saves the size of inputs of all levels for each mode,
         order x k 
     '''
-    def __init__(self, input_mat, rank, input_size, hidden_size, device):
+    def __init__(self, input_mat, rank, input_size, hidden_size, device, args):
         # Intialize parameters
         self.input_mat = input_mat
         self.input_size = input_size
@@ -86,6 +87,10 @@ class TensorCodec:
         self.model = self.model.to(self.i_device)        
 
         # Load factors
+        self.factors = []
+        for mode in range(self.order):
+            self.factors.append(np.load(f'features/{args.dataset}_{args.known_entry}_factor{mode+1}.npy'))
+            self.factors[mode] = torch.tensor(self.factors[mode], device=self.i_device)
         
         # Build bases, order x k
         self.bases_list = [[] for _ in range(self.order)]        
@@ -121,11 +126,22 @@ class TensorCodec:
         for i in range(self.order):
             self.comp_size += math.ceil(self.input_mat.src_dims[i] * math.ceil(math.log(self.input_mat.src_dims[i], 2)) / 8)
         print(f"Compressed size:{self.comp_size} bytes")
+
+        
         # model -> tensor
         self.perm_list = [torch.tensor(list(range(self.input_mat.dims[i])), dtype=torch.long, device=self.i_device) for i in range(self.order)]
+        with open(f'mapping/{args.dataset}_{args.known_entry}_model2tens.pickle', 'rb') as f:
+            mappings = pickle.load(f)
+        for mode in range(self.order):
+            self.perm_list[mode][range(len(mappings[mode]))] = torch.tensor(mappings[mode], dtype=torch.long, device=self.i_device)
+        
         # tensor -> model
         self.inv_perm_list = [torch.tensor(list(range(self.input_mat.dims[i])), dtype=torch.long, device=self.i_device) for i in range(self.order)]
-    
+
+        '''
+        for mode in range(self.order):
+            self.inv_perm_list[mode][self.perm_list[mode]] = torch.arange(self.input_mat.dims[mode], dtype=torch.long, device=self.i_device)
+            print(f'mode:{mode}, perm: {torch.mean(self.perm_list[mode].to(torch.float))}, inv perm: {torch.mean(self.inv_perm_list[mode].to(torch.float))}') '''
     
     # Given a model indices output predictions
     # model_idx: batch size x order
