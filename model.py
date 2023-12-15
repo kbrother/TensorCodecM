@@ -84,6 +84,9 @@ class TensorCodec:
         if len(self.device) > 1:
             self.model = nn.DataParallel(self.model, device_ids = self.device)                        
         self.model = self.model.to(self.i_device)        
+
+        # Load factors
+        
         # Build bases, order x k
         self.bases_list = [[] for _ in range(self.order)]        
         for i in range(self.order):

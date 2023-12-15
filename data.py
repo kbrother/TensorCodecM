@@ -8,19 +8,29 @@ class tensor:
         input_size: order x k
         dims: dimensions with padded size, size is order
     '''
-    def __init__(self, dims, input_size, input_path, device):                
-        # Load data        
-        train_set = np.load(input_path + "_train.npy")
-        val_set = np.load(input_path + "_valid.npy")
-        test_set = np.load(input_path + "_test.npy")
+    def __init__(self, input_size, input_path, device, known_entry):                
+        # Load training and validation set
+        input_tensor = np.load(input_path + "_orig.npy")
+        train_set = np.load(input_path + f"_{known_entry}_orig_train.npy")
+        val_set = np.load(input_path + f"_{known_entry}_orig_valid.npy")        
         
-        self.num_train, self.num_val, self.num_test = train_set.shape[0], val_set.shape[0], test_set.shape[0]        
-        self.src_dims = dims          
+        self.num_train, self.num_val = train_set.shape[0], val_set.shape[0]
+        self.num_test = input_tensor.size - self.num_train - self.num_val
+        
+        self.src_dims = input_tensor.shape
         self.order = len(self.src_dims)        
-        self.src_train_idx, self.src_val_idx, self.src_test_idx = train_set[:, :self.order].astype(int), val_set[:, :self.order].astype(int), test_set[:, :self.order].astype(int)
-        self.src_train_vals, self.src_val_vals, self.src_test_vals = train_set[:, self.order].astype(np.float64), val_set[:, self.order].astype(np.float64), test_set[:, self.order].astype(int)
+        self.src_train_idx, self.src_val_idx = train_set[:, :self.order].astype(int), val_set[:, :self.order].astype(int)
+        self.src_train_vals, self.src_val_vals = train_set[:, self.order].astype(np.float64), val_set[:, self.order].astype(np.float64)
+        
         self.train_norm = math.sqrt(np.square(self.src_train_vals).sum())                
-        self.val_norm = math.sqrt(np.square(self.src_val_vals).sum())
+        self.val_norm = math.sqrt(np.square(self.src_val_vals).sum())    
+
+        # load test set
+        test_tensor = np.ones(self.src_dims)
+        test_tensor[self.src_train_idx[:, 0], self.src_train_idx[:, 1], self.src_train_idx[: ,2]] = 0
+        test_tensor[self.src_val_idx[:, 0], self.src_val_idx[:, 1], self.src_val_idx[:, 2]] = 0        
+        self.src_test_idx = np.transpose(np.nonzero(test_tensor))
+        self.src_test_vals = input_tensor[self.src_test_idx[:, 0], self.src_test_idx[:, 1], self.src_test_idx[:, 2]]        
         self.test_norm = math.sqrt(np.square(self.src_test_vals).sum())                
         
         # Set base                        
@@ -35,4 +45,5 @@ class tensor:
         device = torch.device("cuda:" + str(device))
         self.src_base = torch.tensor(self.src_base, dtype=torch.long, device=device)
         self.src_dims_gpu = torch.tensor(self.src_dims, dtype=torch.long, device=device)        
-        self.dims = torch.tensor(self.dims, dtype=torch.long, device=device)       
+        self.dims = torch.tensor(self.dims, dtype=torch.long, device=device)      
+        print(f'saved: {np.sum(self.src_train_vals)}, real: {np.sum(input_tensor[self.src_train_idx[:, 0], self.src_train_idx[:, 1], self.src_train_idx[: ,2]])}')

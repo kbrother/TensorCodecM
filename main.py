@@ -101,26 +101,18 @@ def train_model(n_model, args):
     print(f'running time: {end_time - start_time}')
     
             
-# python main.py train -d ml -ip results/ml -de 0 1 2 3 -di 6040 3952 -rk 8 -hs 8 -sp results/ml_r8_h8_wor -lr 0.01 -e 500
-# python main.py test_perm -d pems -ip results/pems -de 0 1 2 3 -di 963 144 440 -rk 8 -hs 8
-# python main.py train -d airquality -ip results/airquality -de 0 1 2 3 -di 5600 362 6 -rk 8 -hs 8 -sp results/airquality_r8_h8 -lr 0.1 -e 500
-# python main.py train -d absorb -ip results/absorb -de 0 1 2 3 -di 192 288 30 120 -rk 8 -hs 8 -sp results/absorb_r8_h8 -lr 0.1 -e 500
-# python main.py train -d pems -ip results/pems -de 0 1 2 3 -di 963 144 440 -rk 8 -hs 8 -sp results/pems_r8_h8 -lr 0.1 -e 500
+# python main.py train -d uber -ip ../data/uber -k 5 -de 0 1 2 3 
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument('action', type=str, help='train')
     parser.add_argument("-d", "--dataset", type=str)   
     parser.add_argument("-ip", "--input_path", type=str)
+    parser.add_argument("-k", "--known_entry", type=int)
     
     parser.add_argument(
         "-de", "--device",
         action="store", nargs='+', type=int
     )    
-
-    parser.add_argument(
-        "-di", "--dims",
-        action="store", nargs='+', type=int
-    )
     
     parser.add_argument(
         "-rk", "--rank",
@@ -169,13 +161,15 @@ if __name__ == '__main__':
         lines = f.read().split("\n")
         input_size = [[int(word) for word in line.split()] for line in lines if line]        
      
-    input_mat = tensor(args.dims, input_size, args.input_path, args.device[0])        
+    input_mat = tensor(input_size, args.input_path, args.device[0], args.known_entry)        
     print("load finish")
 
-    n_model = TensorCodec(input_mat, args.rank, input_size, args.hidden_size, args.device)
+    '''
+    n_model = TensorCodec(input_mat, args.rank, input_size, args.hidden_size, args.device, args.known_entry)
     if args.action == "train":        
         train_model(n_model, args)    
     elif args.action == "test_perm":
         test_perm(n_model, args)
     else:
         assert(False)
+    '''
