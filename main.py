@@ -67,8 +67,8 @@ def train_model(n_model, args):
         with torch.no_grad():
             val_loss, val_norm = n_model.L2_loss(False, "val", args.batch_size, np.arange(n_model.input_mat.num_val))
             test_loss, test_norm = n_model.L2_loss(False, "test", args.batch_size, np.arange(n_model.input_mat.num_test))
-            test_fit = math.sqrt(test_loss)
-            val_fit = math.sqrt(val_loss) 
+            test_fit = 1 - math.sqrt(test_loss)/math.sqrt(test_norm)
+            val_fit = 1 - math.sqrt(val_loss)/math.sqrt(val_norm) 
             
             if max_fit < val_fit:
                 max_fit = val_fit     
@@ -101,7 +101,7 @@ def train_model(n_model, args):
     print(f'running time: {end_time - start_time}')
     
             
-# python main.py train -d uber -ip ../data/uber -k 5 -de 0 1 2 3 -hs 8 -r 8
+# python main.py train -d uber -ip ../data/uber -k 5 -de 0 1 2 3 -hs 8 -r 8 -lr 0.1 -sp results/uber
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument('action', type=str, help='train')
@@ -166,11 +166,9 @@ if __name__ == '__main__':
 
     n_model = TensorCodec(input_mat, args.rank, input_size, 
                           args.hidden_size, args.device, args)
-    '''
     if args.action == "train":        
         train_model(n_model, args)    
     elif args.action == "test_perm":
         test_perm(n_model, args)
     else:
         assert(False)
-    '''
