@@ -38,7 +38,7 @@ def train_model(n_model, args):
     tol_count = 0
     start_time = time.time()
     for epoch in range(args.epoch): 
-        optimizer = torch.optim.Adam(n_model.model.parameters(), lr=args.lr/args.num_batch) 
+        optimizer = torch.optim.Adam(n_model.model.parameters(), lr=args.lr/args.num_batch, weight_decay=0) 
         n_model.model.train()               
         curr_order = np.random.permutation(n_model.input_mat.num_train)            
         
@@ -57,11 +57,9 @@ def train_model(n_model, args):
         
         # Reordering
         n_model.model.eval()
-        '''
         for j in range(n_model.input_mat.order):
             delta_loss = n_model.reordering(j, args.batch_size)
             train_loss += delta_loss
-        '''
         
         train_fit = 1 - math.sqrt(train_loss) / math.sqrt(train_norm)
         with torch.no_grad():
@@ -100,8 +98,12 @@ def train_model(n_model, args):
         lossfile.write(f'running time: {end_time - start_time}\n')    
     print(f'running time: {end_time - start_time}')
     
-            
-# python main.py train -d uber -ip ../data/uber -k 5 -de 0 1 2 3 -hs 8 -r 8 -lr 0.1 -sp results/uber
+
+# python main.py test_perm -d uber -ip ../data/uber -k 5 -de 0 1 2 3 -hs 12 -r 12 -lr 0.1 -sp results/uber
+# python main.py train -d uber -ip ../data/uber -k 5 -de 0 1 2 3 -hs 12 -r 12 -lr 0.1 -sp results/uber
+# python main.py train -d airquality -ip ../data/airquality -k 5 -de 0 1 2 3 -hs 8 -r 8 -lr 0.1 -sp results/airquality
+# python main.py train -d action -ip ../data/action -k 5 -de 0 1 2 3 -hs 8 -r 8 -lr 0.1 -sp results/action
+# python main.py train -d pems -ip ../data/pems -k 5 -de 0 1 2 3 -hs 8 -r 8 -lr 0.1 -sp results/pems
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument('action', type=str, help='train')
@@ -131,7 +133,7 @@ if __name__ == '__main__':
     
     parser.add_argument(
         "-b", "--batch_size",
-        action="store", default=2**21, type=int
+        action="store", default=2**20, type=int
     )
     
     parser.add_argument(

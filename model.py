@@ -159,7 +159,7 @@ class TensorCodec:
         #model_input = model_input.cpu()               
         return self.model(model_input)
 
-        
+    
     # minibatch L2 loss
     # samples: sample idx, batch size
     def L2_loss(self, need_bp, set_type, batch_size, samples):
@@ -187,7 +187,7 @@ class TensorCodec:
                 for j in range(self.order):
                     curr_model_idx[:, j] = self.inv_perm_list[j][curr_ten_idx[:, j]]
                                                 
-            preds = self.predict(curr_model_idx)
+            preds = self.predict(curr_model_idx) # + self.input_mat.train_avg
             curr_loss = torch.square(preds - vals).sum()
             return_loss += curr_loss.item()
             minibatch_norm += torch.square(vals).sum().item()
@@ -196,21 +196,120 @@ class TensorCodec:
         return return_loss, minibatch_norm
 
 
-    def reordering(self, mode, batch_size):        
-        # tensor -> model need to be changed
+    '''
+        Input
+            curr_order: 0 for row and 1 for col
+            tensor_idx: indices of tensor
+            num_bucket: number of bucket
+            
+        Output
+            bucket_idx: buckets correspond to model indices
+    '''
+    def hashing_euclid(self, curr_order, tensor_idx, num_bucket, batch_size):
+        num_idx = tensor_idx.shape[0]
+        slice_size = self.factors[curr_order].shape[1]
+        curr_line = 5 * (np.random.rand(slice_size) - 0.5)
+        curr_line = curr_line / np.linalg.norm(curr_line)
+        curr_lines = np.tile(curr_line, num_idx)
+        proj_pts = [0 for _ in range(num_idx)]
+        
+        # Build repeated long vector for the current line        
+        slices = self.factors[curr_order][tensor_idx].flatten()
+        proj_pts = torch.zeros(num_idx, dtype=torch.double).to(self.i_device)
+        with torch.no_grad():
+            for i in range(0, num_idx * slice_size, batch_size):
+                if num_idx*slice_size - i < batch_size: curr_batch_size = num_idx*slice_size - i
+                else: curr_batch_size = batch_size
+                temp_vec1 = torch.tensor(curr_lines[i:i+curr_batch_size]).to(self.i_device)
+                temp_vec2 = slices[i:i+curr_batch_size]
+                dot_prod = temp_vec1 * temp_vec2
+                curr_idx = torch.arange(i,i+curr_batch_size, device=self.i_device)
+                proj_pts.scatter_(0, curr_idx//slice_size, dot_prod, reduce='add')
+        
+        proj_pts = proj_pts.cpu().numpy()
+        min_point, max_point = min(proj_pts), max(proj_pts)
+                
+        seg_len = (max_point - min_point) / (num_bucket - 1)
+        start_point = random.uniform(min_point - seg_len, min_point)        
+        bucket_idx = proj_pts.copy()
+        #print(f'min: {min_point}, max: {max_point}, seg_len: {seg_len}, start point: {start_point}, max point: {(max_point-start_point) // seg_len}')
+        
+        if (max_point - min_point) < 1e-12:
+            for i in range(num_idx):
+                bucket_idx[i] = 0
+        else:
+            for i in range(num_idx):
+                bucket_idx[i] = int((proj_pts[i] - start_point) // seg_len)            
+        return bucket_idx.astype(int)
+
+    
+    def reordering(self, mode, batch_size):    
+        # Hashing
+        _matrix = self.input_mat
+        curr_dim = _matrix.src_dims[mode]
+
+        # Our paring
+        num_pair = curr_dim//2
+        _temp = (curr_dim-2)//2 + 1
+        tensor_idx = 2*np.arange(_temp) + np.random.randint(2, size=_temp)
+        num_bucket = curr_dim // 8
+        if num_bucket <= 1: 
+            num_bucket = 1
+            bucket_idx = [0 for _ in range(_temp)]
+        else:
+            bucket_idx = self.hashing_euclid(mode, tensor_idx, num_bucket, batch_size)
+
+        # Build bucket
+        buckets = [[] for _ in range(num_bucket)]
+        for i in range(num_pair):            
+            if bucket_idx[i] >= len(buckets):
+                print(f'{bucket_idx[i]}, {len(buckets)}')
+            buckets[bucket_idx[i]].append(tensor_idx[i])
+        if curr_dim % 2 == 1: remains = [curr_dim - 1]
+        else: remains = []
+
+        # Build pairs within buckets
+        first_tidx, second_tidx = [], []
+        for i in range(num_bucket):
+            random.shuffle(buckets[i])
+            if len(buckets[i]) % 2 == 1:
+                rem_part = buckets[i].pop(-1)
+                remains.append(rem_part)
+                remains.append(rem_part^1)
+            
+            first_tidx = first_tidx + buckets[i]
+            second_tidx_temp = [0 for _ in range(len(buckets[i]))]
+            second_tidx_temp[0::2] = [elem^1 for elem in buckets[i][1::2]]
+            second_tidx_temp[1::2] = [elem^1 for elem in buckets[i][0::2]]
+            second_tidx = second_tidx + second_tidx_temp
+        
+        # Build pairs within remains
+        random.shuffle(remains)
+        if len(remains) % 2 == 1: poped = remains.pop(-1)
+        first_tidx = first_tidx + remains[0::2]
+        second_tidx = second_tidx + remains[1::2]
+        first_tidx, second_tidx = torch.tensor(first_tidx, dtype=torch.long, device=self.i_device), torch.tensor(second_tidx, dtype=torch.long, device=self.i_device) 
+        # model idx
+        
         # chech whether the loss decreases         
         with torch.no_grad():
-            #preprocess
+            # random pairing  
+            '''
             num_pair = math.ceil(self.input_mat.src_dims[mode]/2)
             tidx = torch.randperm(self.input_mat.src_dims[mode], device=self.i_device)
             first_tidx, second_tidx = tidx[:num_pair], tidx[num_pair:]
             if self.input_mat.src_dims[mode] % 2 == 1:
-                second_tidx = torch.cat([second_tidx, torch.tensor([first_tidx[-1].item()], device=self.i_device)]) 
+                second_tidx = torch.cat([second_tidx, torch.tensor([first_tidx[-1].item()], device=self.i_device)])             
+            '''
             
-            tidx2pidx = torch.arange(self.input_mat.src_dims[mode], device=self.i_device)
+            #preprocess            
+            tidx2pidx = torch.arange(curr_dim, device=self.i_device)
             tidx2pidx[first_tidx] = torch.arange(num_pair, device=self.i_device)
-            tidx2pidx[second_tidx] = torch.arange(num_pair, device=self.i_device)            
-            tidx2new_tidx = torch.arange(self.input_mat.src_dims[mode], device=self.i_device)
+            tidx2pidx[second_tidx] = torch.arange(num_pair, device=self.i_device)        
+            if curr_dim % 2 == 1:
+                tidx2pidx[poped] = 0
+            
+            tidx2new_tidx = torch.arange(curr_dim, device=self.i_device)
             tidx2new_tidx[first_tidx] = second_tidx.clone()
             tidx2new_tidx[second_tidx] = first_tidx.clone()
 
@@ -220,13 +319,13 @@ class TensorCodec:
             while curr_idx < self.input_mat.num_train:
                 # Compute thre current
                 curr_batch_size = min(self.input_mat.num_train - curr_idx, batch_size)
-                curr_ten_idx = self.input_mat.src_train_idx[curr_idx:curr_idx+curr_batch_size]      
-                curr_ten_idx = torch.tensor(curr_ten_idx, device=self.i_device)
-                curr_model_idx = curr_ten_idx.clone()
+                curr_ten_idx = self.input_mat.src_train_idx[curr_idx:curr_idx+curr_batch_size]
+                curr_ten_idx = torch.tensor(curr_ten_idx, device=self.i_device)                
+                curr_model_idx = curr_ten_idx.clone()                
                 for j in range(self.order):
                     curr_model_idx[:, j] = self.inv_perm_list[j][curr_ten_idx[:, j]]
 
-                curr_preds = self.predict(curr_model_idx)
+                curr_preds = self.predict(curr_model_idx) # + self.input_mat.train_avg
                 curr_vals = torch.tensor(self.input_mat.src_train_vals[curr_idx:curr_idx+curr_batch_size], device=self.i_device)                
                 curr_loss = torch.square(curr_preds - curr_vals)
                 pair_idx = tidx2pidx[curr_ten_idx[:, mode]]
@@ -235,7 +334,8 @@ class TensorCodec:
                 # Compute the future loss
                 new_tidx = tidx2new_tidx[curr_ten_idx[:, mode]]
                 curr_model_idx[:, mode] = self.inv_perm_list[mode][new_tidx]
-                curr_preds = self.predict(curr_model_idx)
+                #print(f"mean: {torch.max(curr_model_idx, dim=0)}")
+                curr_preds = self.predict(curr_model_idx)  # + self.input_mat.train_avg
                 curr_loss = torch.square(curr_preds - curr_vals)
                 pair_idx = tidx2pidx[new_tidx]
                 pair2loss = pair2loss.scatter_reduce(0, pair_idx, curr_loss, reduce="sum")                
@@ -248,5 +348,5 @@ class TensorCodec:
             prev_inv_perm = self.inv_perm_list[mode].clone()
             self.inv_perm_list[mode][first_tidx] = prev_inv_perm[second_tidx]
             self.inv_perm_list[mode][second_tidx] = prev_inv_perm[first_tidx]
-        
+      
         return delta_loss

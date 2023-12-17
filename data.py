@@ -21,7 +21,8 @@ class tensor:
         self.order = len(self.src_dims)        
         self.src_train_idx, self.src_val_idx = train_set[:, :self.order].astype(int), val_set[:, :self.order].astype(int)
         self.src_train_vals, self.src_val_vals = train_set[:, self.order].astype(np.float64), val_set[:, self.order].astype(np.float64)
-        
+
+        #self.train_avg = np.mean(self.src_train_vals)
         self.train_norm = math.sqrt(np.square(self.src_train_vals).sum())                
         self.val_norm = math.sqrt(np.square(self.src_val_vals).sum())    
 
