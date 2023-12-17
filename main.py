@@ -68,8 +68,8 @@ def train_model(n_model, args):
             test_fit = 1 - math.sqrt(test_loss)/math.sqrt(test_norm)
             val_fit = 1 - math.sqrt(val_loss)/math.sqrt(val_norm) 
             
-            if max_fit < val_fit:
-                max_fit = val_fit     
+            if max_fit < 0.5*(train_fit + val_fit):
+                max_fit = 0.5*(train_fit + val_fit)
                 max_epoch = epoch
                 prev_model = copy.deepcopy(n_model.model.state_dict())
           
@@ -81,12 +81,16 @@ def train_model(n_model, args):
     
     n_model.model.load_state_dict(prev_model)
     with torch.no_grad():
+        train_loss, train_norm = n_model.L2_loss(False, "train", args.batch_size, np.arange(n_model.input_mat.num_train))
+        val_loss, val_norm = n_model.L2_loss(False, "val", args.batch_size, np.arange(n_model.input_mat.num_val))
         test_loss, test_norm = n_model.L2_loss(False, "test", args.batch_size, np.arange(n_model.input_mat.num_test))
         
+        train_fit = 1 - math.sqrt(train_loss) / math.sqrt(train_norm)
+        val_fit = 1 - math.sqrt(val_loss)/math.sqrt(val_norm) 
         test_fit = 1 - math.sqrt(test_loss) / math.sqrt(test_norm)
         with open(args.save_path + ".txt", 'a') as lossfile:
-            lossfile.write(f'epoch: {max_epoch}, test loss: {test_fit}\n')    
-            print(f'epoch: {max_epoch}, test loss: {test_fit}\n')
+            lossfile.write(f'epoch: {max_epoch}, train loss: {train_fit}, valid loss: {val_fit}, test loss: {test_fit}\n')    
+            print(f'epoch: {max_epoch}, train loss: {train_fit}, valid loss: {val_fit}, test loss: {test_fit}\n')
     
     torch.save({
         'model_state_dict': prev_model,
