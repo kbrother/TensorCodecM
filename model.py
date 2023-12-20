@@ -137,11 +137,9 @@ class TensorCodec:
         
         # tensor -> model
         self.inv_perm_list = [torch.tensor(list(range(self.input_mat.dims[i])), dtype=torch.long, device=self.i_device) for i in range(self.order)]
-
-        '''
         for mode in range(self.order):
             self.inv_perm_list[mode][self.perm_list[mode]] = torch.arange(self.input_mat.dims[mode], dtype=torch.long, device=self.i_device)
-            print(f'mode:{mode}, perm: {torch.mean(self.perm_list[mode].to(torch.float))}, inv perm: {torch.mean(self.inv_perm_list[mode].to(torch.float))}') '''
+            print(f'mode:{mode}, perm: {torch.mean(self.perm_list[mode].to(torch.float))}, inv perm: {torch.mean(self.inv_perm_list[mode].to(torch.float))}') 
     
     # Given a model indices output predictions
     # model_idx: batch size x order

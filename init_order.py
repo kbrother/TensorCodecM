@@ -78,10 +78,10 @@ def reorder(load_path, order, device):
     
     return change_order, model2tens
 
-# python init_order.py -lp features/uber_5_factor -sp results/uber_5_model2tens -de 0 -di 183 24 1140
-# python init_order.py -lp features/action_5_factor -sp results/action_5_model2tens -de 0 -di 100 570 567 
-# python init_order.py -lp features/airquality_5_factor -sp results/airquality_5_model2tens -de 0 -di 5600 362 6 
-# python init_order.py -lp features/pems_5_factor -sp results/pems_5_model2tens -de 0 -di 963 144 440
+# python init_order.py -lp features/uber_80_factor -sp mapping/uber_80_model2tens -de 0 -di 183 24 1140
+# python init_order.py -lp features/action_80_factor -sp mapping/action_80_model2tens -de 0 -di 100 570 567 
+# python init_order.py -lp features/airquality_80_factor -sp mapping/airquality_80_model2tens -de 0 -di 5600 362 6 
+# python init_order.py -lp features/pems_80_factor -sp mapping/pems_80_model2tens -de 0 -di 963 144 440
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-lp', '--load_path', type=str)
