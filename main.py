@@ -50,53 +50,55 @@ def train_model(n_model, args):
             samples = curr_order[i:i+curr_batch_size]
             optimizer.zero_grad()
             sub_train_loss, sub_train_norm = n_model.L2_loss(True, "train", args.batch_size, samples)
-            train_loss += sub_train_loss
-            train_norm += sub_train_norm
             optimizer.step() 
-
         
         # Reordering
         n_model.model.eval()
         for j in range(n_model.input_mat.order):
-            delta_loss = n_model.reordering(j, args.batch_size)
-            train_loss += delta_loss
+            delta_loss = n_model.reordering(j, args.batch_size)       
         
-        train_fit = 1 - math.sqrt(train_loss) / math.sqrt(train_norm)
+        #train_fit = 1 - math.sqrt(train_loss) / math.sqrt(train_norm)
         with torch.no_grad():
+            train_loss, train_norm = n_model.L2_loss(False, "train", args.batch_size, np.arange(n_model.input_mat.num_train))
             val_loss, val_norm = n_model.L2_loss(False, "val", args.batch_size, np.arange(n_model.input_mat.num_val))
             test_loss, test_norm = n_model.L2_loss(False, "test", args.batch_size, np.arange(n_model.input_mat.num_test))
-            test_fit = 1 - math.sqrt(test_loss)/math.sqrt(test_norm)
-            val_fit = 1 - math.sqrt(val_loss)/math.sqrt(val_norm) 
+            valid_norm, total_norm = (train_norm + val_norm), (train_norm + val_norm + test_norm)
+            valid_err, total_err = (train_loss + val_loss), (train_loss + val_loss + test_loss)
+            valid_fit = 1 - math.sqrt(valid_err)/math.sqrt(valid_norm)
+            total_fit = 1 - math.sqrt(total_err)/math.sqrt(total_norm) 
             
-            if max_fit < 0.5*(train_fit + val_fit):
-                max_fit = 0.5*(train_fit + val_fit)
+            if max_fit < valid_fit:
+                max_fit = valid_fit
                 max_epoch = epoch
                 prev_model = copy.deepcopy(n_model.model.state_dict())
+                prev_inv_perm = [_perm.clone() for _perm in n_model.inv_perm_list]
           
         with open(args.save_path + ".txt", 'a') as lossfile:
-            lossfile.write(f'epoch:{epoch}, train loss: {train_fit}, valid loss: {val_fit}, test loss: {test_fit}\n')    
-            print(f'epoch:{epoch}, train loss: {train_fit}, valid loss: {val_fit}, test loss: {test_fit}')     
+            lossfile.write(f'epoch:{epoch}, valid loss: {valid_fit}, test loss: {total_fit}\n')    
+            print(f'epoch:{epoch}, valid loss: {valid_fit}, test loss: {total_fit}')     
                    
         #if tol_count >= args.tol: break
-    
+
     n_model.model.load_state_dict(prev_model)
+    n_model.inv_perm_list = prev_inv_perm
     with torch.no_grad():
         train_loss, train_norm = n_model.L2_loss(False, "train", args.batch_size, np.arange(n_model.input_mat.num_train))
         val_loss, val_norm = n_model.L2_loss(False, "val", args.batch_size, np.arange(n_model.input_mat.num_val))
         test_loss, test_norm = n_model.L2_loss(False, "test", args.batch_size, np.arange(n_model.input_mat.num_test))
+        valid_norm, total_norm = (train_norm + val_norm), (train_norm + val_norm + test_norm)
+        valid_err, total_err = (train_loss + val_loss), (train_loss + val_loss + test_loss)
+        valid_fit = 1 - math.sqrt(valid_err)/math.sqrt(valid_norm)
+        total_fit = 1 - math.sqrt(total_err)/math.sqrt(total_norm) 
         
-        train_fit = 1 - math.sqrt(train_loss) / math.sqrt(train_norm)
-        val_fit = 1 - math.sqrt(val_loss)/math.sqrt(val_norm) 
-        test_fit = 1 - math.sqrt(test_loss) / math.sqrt(test_norm)
         with open(args.save_path + ".txt", 'a') as lossfile:
-            lossfile.write(f'epoch: {max_epoch}, train loss: {train_fit}, valid loss: {val_fit}, test loss: {test_fit}\n')    
-            print(f'epoch: {max_epoch}, train loss: {train_fit}, valid loss: {val_fit}, test loss: {test_fit}\n')
+            lossfile.write(f'epoch:{epoch}, valid loss: {valid_fit}, test loss: {total_fit}\n')    
+            print(f'epoch:{epoch}, valid loss: {valid_fit}, test loss: {total_fit}')                        
     
     torch.save({
         'model_state_dict': prev_model,
         'loss': max_fit,
-    }, args.save_path + ".pt")
-            
+        'inv_perm_list': prev_inv_perm
+    }, args.save_path + ".pt")        
     end_time = time.time()
     with open(args.save_path + ".txt", 'a') as lossfile:
         lossfile.write(f'running time: {end_time - start_time}\n')    
@@ -132,7 +134,7 @@ if __name__ == '__main__':
     
     parser.add_argument(
         "-e", "--epoch",
-        action="store", default=500, type=int
+        action="store", default=1000, type=int
     )
     
     parser.add_argument(
