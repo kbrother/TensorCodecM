@@ -11,28 +11,28 @@ class tensor:
     def __init__(self, input_size, input_path, device, known_entry):                
         # Load training and validation set
         input_tensor = np.load(input_path + "_orig.npy")
-        train_set = np.load(input_path + f"_{known_entry}_orig_train.npy")
+        test_set = np.load(input_path + f"_{known_entry}_orig_test.npy")
         val_set = np.load(input_path + f"_{known_entry}_orig_valid.npy")        
         
-        self.num_train, self.num_val = train_set.shape[0], val_set.shape[0]
-        self.num_test = input_tensor.size - self.num_train - self.num_val
+        self.num_test, self.num_val = test_set.shape[0], val_set.shape[0]
+        self.num_train = input_tensor.size - self.num_test - self.num_val
         
         self.src_dims = input_tensor.shape
         self.order = len(self.src_dims)        
-        self.src_train_idx, self.src_val_idx = train_set[:, :self.order].astype(int), val_set[:, :self.order].astype(int)
-        self.src_train_vals, self.src_val_vals = train_set[:, self.order].astype(np.float64), val_set[:, self.order].astype(np.float64)
+        self.src_test_idx, self.src_val_idx = test_set[:, :self.order].astype(int), val_set[:, :self.order].astype(int)
+        self.src_test_vals, self.src_val_vals = test_set[:, self.order].astype(np.float64), val_set[:, self.order].astype(np.float64)
 
         #self.train_avg = np.mean(self.src_train_vals)
-        self.train_norm = math.sqrt(np.square(self.src_train_vals).sum())                
+        self.test_norm = math.sqrt(np.square(self.src_test_vals).sum())                
         self.val_norm = math.sqrt(np.square(self.src_val_vals).sum())    
 
         # load test set
-        test_tensor = np.ones(self.src_dims)
-        test_tensor[self.src_train_idx[:, 0], self.src_train_idx[:, 1], self.src_train_idx[: ,2]] = 0
-        test_tensor[self.src_val_idx[:, 0], self.src_val_idx[:, 1], self.src_val_idx[:, 2]] = 0        
-        self.src_test_idx = np.transpose(np.nonzero(test_tensor))
-        self.src_test_vals = input_tensor[self.src_test_idx[:, 0], self.src_test_idx[:, 1], self.src_test_idx[:, 2]]        
-        self.test_norm = math.sqrt(np.square(self.src_test_vals).sum())                
+        train_tensor = np.ones(self.src_dims)
+        train_tensor[self.src_test_idx[:, 0], self.src_test_idx[:, 1], self.src_test_idx[: ,2]] = 0
+        train_tensor[self.src_val_idx[:, 0], self.src_val_idx[:, 1], self.src_val_idx[:, 2]] = 0        
+        self.src_train_idx = np.transpose(np.nonzero(train_tensor))
+        self.src_train_vals = input_tensor[self.src_train_idx[:, 0], self.src_train_idx[:, 1], self.src_train_idx[:, 2]]        
+        self.train_norm = math.sqrt(np.square(self.src_train_vals).sum())                
         
         # Set base                        
         self.dims = [int(np.prod(np.array(input_size[i]))) for i in range(self.order)]                

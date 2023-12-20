@@ -104,7 +104,7 @@ def train_model(n_model, args):
     
 
 # python main.py test_perm -d uber -ip ../data/uber -k 5 -de 0 1 2 3 -hs 12 -r 12 -lr 0.1 -sp results/uber
-# python main.py train -d uber -ip ../data/uber -k 20 -de 4 5 6 7 -hs 15 -r 12 -lr 0.1 -sp results/uber_r12_h15_k10_wd30 -wd 30
+# python main.py train -d uber -ip ../data/uber -k 80 -de 4 5 6 7 -hs 8 -r 8 -lr 0.1 -sp results/uber_r8_h8_k80_wd0 -wd 0
 # python main.py train -d airquality -ip ../data/airquality -k 5 -de 0 1 2 3 -hs 8 -r 8 -lr 0.1 -sp results/airquality
 # python main.py train -d action -ip ../data/action -k 5 -de 0 1 2 3 -hs 8 -r 8 -lr 0.1 -sp results/action
 # python main.py train -d pems -ip ../data/pems -k 5 -de 0 1 2 3 -hs 8 -r 8 -lr 0.1 -sp results/pems
