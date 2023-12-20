@@ -89,7 +89,7 @@ class TensorCodec:
         # Load factors
         self.factors = []
         for mode in range(self.order):
-            self.factors.append(np.load(f'features/{args.dataset}_{args.known_entry}_factor{mode+1}.npy'))
+            self.factors.append(np.load(f'TensorCodec_completion/features/{args.dataset}_{args.known_entry}_factor{mode+1}.npy'))
             self.factors[mode] = torch.tensor(self.factors[mode], device=self.i_device)
         
         # Build bases, order x k
@@ -130,7 +130,7 @@ class TensorCodec:
         
         # model -> tensor
         self.perm_list = [torch.tensor(list(range(self.input_mat.dims[i])), dtype=torch.long, device=self.i_device) for i in range(self.order)]
-        with open(f'mapping/{args.dataset}_{args.known_entry}_model2tens.pickle', 'rb') as f:
+        with open(f'TensorCodec_completion/mapping/{args.dataset}_{args.known_entry}_model2tens.pickle', 'rb') as f:
             mappings = pickle.load(f)
         for mode in range(self.order):
             self.perm_list[mode][range(len(mappings[mode]))] = torch.tensor(mappings[mode], dtype=torch.long, device=self.i_device)

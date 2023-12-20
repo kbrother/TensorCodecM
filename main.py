@@ -169,7 +169,7 @@ if __name__ == '__main__':
         
     args = parser.parse_args()      
     # decompsress m_list and n_list
-    with open("input_size/" + args.dataset + ".txt") as f:
+    with open("TensorCodec_completion/input_size/" + args.dataset + ".txt") as f:
         lines = f.read().split("\n")
         input_size = [[int(word) for word in line.split()] for line in lines if line]        
      
