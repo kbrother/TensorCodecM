@@ -89,7 +89,7 @@ class TensorCodec:
         # Load factors
         self.factors = []
         for mode in range(self.order):
-            self.factors.append(np.load(f'TensorCodec_completion/features/{args.dataset}_{args.known_entry}_factor{mode+1}.npy'))
+            self.factors.append(np.load(f'TensorCodec_completion/features/{args.dataset}_{args.known_entry}_factor{mode+1}.npy'), allow_pickle=True)
             self.factors[mode] = torch.tensor(self.factors[mode], device=self.i_device)
         
         # Build bases, order x k
