@@ -10,9 +10,9 @@ class tensor:
     '''
     def __init__(self, input_size, input_path, device, known_entry):                
         # Load training and validation set
-        input_tensor = np.load(input_path + "_orig.npy", allow_pickle=True)
-        test_set = np.load(input_path + f"_{known_entry}_orig_test.npy", allow_pickle=True)
-        val_set = np.load(input_path + f"_{known_entry}_orig_valid.npy", allow_pickle=True)        
+        input_tensor = np.load(input_path + "_orig.npy")
+        test_set = np.load(input_path + f"_{known_entry}_orig_test.npy")
+        val_set = np.load(input_path + f"_{known_entry}_orig_valid.npy")        
         
         self.num_test, self.num_val = test_set.shape[0], val_set.shape[0]
         self.num_train = input_tensor.size - self.num_test - self.num_val
