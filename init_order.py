@@ -22,16 +22,17 @@ def in_order_search(_tree_dict, curr_node):
     return return_list
 
 
-def reorder(load_path, order, device):
-    with torch.no_grad():                    
+def reorder(input_tensor):
+    with torch.no_grad():    
+        input_tensor = torch.from_numpy(input_tensor)
+        dim = len(input_tensor.shape)
         mxsz = (1 << 25)
-        change_order, model2tens = [], []
-        for mode in range(order):
-            mat = np.load(args.load_path + f"{mode + 1}.npy")            
-            mat = torch.from_numpy(mat).to(device)            
+        change_order, final_orders = [], []
+        for i in range(dim):
+            mat = input_tensor.to(0).permute(i, *[j for j in range(dim) if j != i]).contiguous().view(input_tensor.shape[i], -1)
             batch_size = (mxsz // mat.shape[-1])           
 
-            adj = torch.zeros(mat.shape[0] * mat.shape[0]).to(device).double()
+            adj = torch.zeros(mat.shape[0] * mat.shape[0]).to(0).double()
             for j in range(0, mat.shape[0] * mat.shape[0], batch_size):
                 bsize = min(batch_size, mat.shape[0] * mat.shape[0] - j)
                 _idx = j + torch.arange(bsize, dtype=torch.long)
@@ -40,10 +41,10 @@ def reorder(load_path, order, device):
 
             inf = adj.max() * 2 + 1
             adj = adj.view(mat.shape[0], mat.shape[0])
-            dist = torch.ones(mat.shape[0], dtype=torch.double).to(device) * inf
-            argdist = -torch.ones(mat.shape[0], dtype=torch.long).to(device)
+            dist = torch.ones(mat.shape[0], dtype=torch.double).to(0) * inf
+            argdist = -torch.ones(mat.shape[0], dtype=torch.long).to(0)
             dist[0] = 0
-            mask = torch.zeros(mat.shape[0], dtype=torch.long).to(device)
+            mask = torch.zeros(mat.shape[0], dtype=torch.long).to(0)
             edges = []
             mst_size = 0.
             tree_dict = {}
@@ -69,19 +70,19 @@ def reorder(load_path, order, device):
             new_mat = mat[y]
             lengths = loss_fn(new_mat, batch_size=batch_size)
             cut_idx = lengths.argmax(-1)
-            model2tens.append(y[cut_idx+1:-1] + y[:cut_idx+1])
+            final_orders.append(y[cut_idx+1:-1] + y[:cut_idx+1])
             #counts = torch.bincount(torch.LongTensor(final_orders[-1]))
-            new_length_sum = loss_fn(mat[model2tens[-1]], batch_size=batch_size).sum().item()
+            new_length_sum = loss_fn(mat[final_orders[-1]], batch_size=batch_size).sum().item()
             change_order.append(((prev_length_sum - new_length_sum) > 0.1*prev_length_sum))
-            print(f'order: {mode}, loss before: {prev_length_sum}, loss after: {new_length_sum}')
+            print(f'order: {i}, loss before: {prev_length_sum}, loss after: {new_length_sum}')
             del mat
     
-    return change_order, model2tens
+    return change_order, final_orders
 
-# python init_order.py -lp features/uber_80_factor -sp mapping/uber_80_model2tens -de 0 -di 183 24 1140
-# python init_order.py -lp features/action_80_factor -sp mapping/action_80_model2tens -de 0 -di 100 570 567 
-# python init_order.py -lp features/airquality_80_factor -sp mapping/airquality_80_model2tens -de 0 -di 5600 362 6 
-# python init_order.py -lp features/pems_80_factor -sp mapping/pems_80_model2tens -de 0 -di 963 144 440
+# python init_order.py -lp ../data/uber -sp mapping/uber_80_model2tens -de 0 -k 80
+# python init_order.py -lp ../data/airquality -sp mapping/airquality_80_model2tens -de 0 -k 80
+# python init_order.py -lp ../data/action -sp mapping/action_80_model2tens -de 0 -k 80
+# python init_order.py -lp ../data/pems -sp mapping/pems_80_model2tens -de 0 -k 80
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-lp', '--load_path', type=str)
@@ -91,19 +92,36 @@ if __name__ == '__main__':
         action="store", default=0, type=int
     )
 
-    parser.add_argument(
-        "-di", "--dims",
-        action="store", nargs='+', type=int
-    )        
-    args = parser.parse_args()    
-    order = len(args.dims)
+    parser.add_argument('-k', '--known_entry', type=str)
+    
+    args = parser.parse_args()   
 
     start_time = time.time()
     device = torch.device(f'cuda:{args.device}')
-    change_order, model2tens = reorder(args.load_path, order, device)
 
+    # Load tensor, test set, valid set
+    input_tensor = np.load(args.load_path + "_orig.npy")
+    dims = input_tensor.shape
+    order = len(dims)
+    test_set = np.load(args.load_path + f"_{args.known_entry}_orig_test.npy")
+    val_set = np.load(args.load_path + f"_{args.known_entry}_orig_valid.npy")        
+    test_idx, val_idx = test_set[:, :order].astype(int), val_set[:, :order].astype(int)
+    test_vals, val_vals = test_set[:, order].astype(np.float64), val_set[:, order].astype(np.float64)
+
+    # load test set
+    train_tensor = np.ones(input_tensor.shape)
+    train_tensor[test_idx[:, 0], test_idx[:, 1], test_idx[: ,2]] = 0
+    train_tensor[val_idx[:, 0], val_idx[:, 1], val_idx[:, 2]] = 0        
+    train_idx = np.transpose(np.nonzero(train_tensor))
+    train_mean = np.mean(input_tensor[train_idx[:, 0], train_idx[:, 1], train_idx[:, 2]])   
+    
+    # Filter input tensor
+    input_tensor[test_idx[:, 0], test_idx[:, 1], test_idx[: ,2]] = train_mean
+    input_tensor[val_idx[:, 0], val_idx[:, 1], val_idx[:, 2]] = train_mean        
+    
+    change_order, model2tens = reorder(input_tensor)
     for i in range(order):
-        if not change_order[i]: model2tens[i] = list(range(args.dims[i]))
+        if not change_order[i]: model2tens[i] = list(range(dims[i]))
 
     with open(args.save_path + ".pickle", mode="wb") as f:
         pickle.dump(model2tens, f)
