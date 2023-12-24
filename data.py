@@ -17,7 +17,7 @@ class tensor:
         self.num_test, self.num_val = test_set.shape[0], val_set.shape[0]
         self.num_train = input_tensor.size - self.num_test - self.num_val
         
-        self.src_dims = input_tensor.shape
+        self.src_dims = list(input_tensor.shape)
         self.order = len(self.src_dims)        
         self.src_test_idx, self.src_val_idx = test_set[:, :self.order].astype(int), val_set[:, :self.order].astype(int)
         self.src_test_vals, self.src_val_vals = test_set[:, self.order].astype(np.float64), val_set[:, self.order].astype(np.float64)
@@ -41,6 +41,14 @@ class tensor:
         for i in range(self.order-1, -1, -1):
             self.src_base.insert(0, temp_base)
             temp_base *= self.src_dims[i]
+
+        # Define legacy
+        default_val = np.mean(self.src_train_vals)
+        input_tensor[self.src_test_idx[:, 0], self.src_test_idx[:, 1], self.src_test_idx[: ,2]] = default_val
+        input_tensor[self.src_val_idx[:, 0], self.src_val_idx[:, 1], self.src_val_idx[:, 2]] = default_val
+        self.src_tensor = input_tensor
+        self.src_fake_vals = input_tensor.flatten()
+        self.real_num_entries = len(self.src_fake_vals)
                             
         # Load to gpu
         device = torch.device("cuda:" + str(device))
@@ -48,3 +56,10 @@ class tensor:
         self.src_dims_gpu = torch.tensor(self.src_dims, dtype=torch.long, device=device)        
         self.dims = torch.tensor(self.dims, dtype=torch.long, device=device)      
         print(f'saved: {np.sum(self.src_train_vals)}, real: {np.sum(input_tensor[self.src_train_idx[:, 0], self.src_train_idx[:, 1], self.src_train_idx[: ,2]])}')
+
+    
+    def extract_slice(self, curr_order, idx):
+        curr_input = [slice(None) for _ in range(self.order)]
+        curr_input[curr_order] = idx
+        curr_input = tuple(curr_input)
+        return self.src_tensor[curr_input].flatten()

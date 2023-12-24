@@ -40,22 +40,23 @@ def train_model(n_model, args):
     for epoch in range(args.epoch): 
         optimizer = torch.optim.Adam(n_model.model.parameters(), lr=args.lr/args.num_batch, weight_decay=args.weight_decay) 
         n_model.model.train()               
-        curr_order = np.random.permutation(n_model.input_mat.num_train)            
+        curr_order = np.random.permutation(n_model.input_mat.real_num_entries)
         
         # Gradietn descent
-        train_loss, train_norm = 0, 0
-        for i in tqdm(range(0, n_model.input_mat.num_train, minibatch_size)):
-            curr_batch_size = min(n_model.input_mat.num_train - i, minibatch_size)            
-            #samples = n_model.input_mat.src_train_idx[curr_order[i:i+curr_batch_size]]            
+        for i in tqdm(range(0, n_model.input_mat.real_num_entries, minibatch_size)):
+            if n_model.input_mat.real_num_entries - i < minibatch_size: 
+                curr_batch_size = n_model.input_mat.real_num_entries - i
+            else: curr_batch_size = minibatch_size
             samples = curr_order[i:i+curr_batch_size]
+            
             optimizer.zero_grad()
-            sub_train_loss, sub_train_norm = n_model.L2_loss(True, "train", args.batch_size, samples)
+            mini_loss, mini_norm = n_model.L2_loss_orig(True, args.batch_size, samples)
             optimizer.step() 
         
         # Reordering
         n_model.model.eval()
-        for j in range(n_model.input_mat.order):
-            delta_loss = n_model.reordering(j, args.batch_size)       
+        for _dim in range(n_model.order):
+            n_model.change_permutation(args.batch_size, _dim)     
         
         #train_fit = 1 - math.sqrt(train_loss) / math.sqrt(train_norm)
         with torch.no_grad():
