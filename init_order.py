@@ -79,10 +79,10 @@ def reorder(input_tensor):
     
     return change_order, final_orders
 
-# python init_order.py -lp ../data/uber -sp mapping/uber_80_model2tens -de 0 -k 80
-# python init_order.py -lp ../data/airquality -sp mapping/airquality_80_model2tens -de 0 -k 80
-# python init_order.py -lp ../data/action -sp mapping/action_80_model2tens -de 0 -k 80
-# python init_order.py -lp ../data/pems -sp mapping/pems_80_model2tens -de 0 -k 80
+# python init_order.py -lp ../data/uber -sp mapping/uber_60_model2tens -de 0 -k 60
+# python init_order.py -lp ../data/airquality -sp mapping/airquality_60_model2tens -de 0 -k 60
+# python init_order.py -lp ../data/action -sp mapping/action_60_model2tens -de 0 -k 60
+# python init_order.py -lp ../data/pems -sp mapping/pems_60_model2tens -de 0 -k 60
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-lp', '--load_path', type=str)
