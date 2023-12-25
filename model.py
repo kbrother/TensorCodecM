@@ -316,10 +316,13 @@ class TensorCodec:
         
         # Build pairs within remains
         random.shuffle(remains)
-        if len(remains) % 2 == 1: remains.pop(-1)
+        if len(remains) % 2 == 1: 
+            poped=remains.pop(-1)
+            poped = self.perm_list[curr_order][poped].item()
         first_elem = first_elem + remains[0::2]
         second_elem = second_elem + remains[1::2]
         first_elem, second_elem = torch.tensor(first_elem, dtype=torch.long, device=self.i_device), torch.tensor(second_elem, dtype=torch.long, device=self.i_device) 
+        first_tidx, second_tidx = self.perm_list[curr_order][first_elem], self.perm_list[curr_order][second_elem]        
         
         # Initialize variables
         num_slice_entry = 1
@@ -333,84 +336,62 @@ class TensorCodec:
         num_total_entry = num_pair * num_slice_entry
         delta_loss, curr_idx = 0., 0
         
-        # Preprocess
-        self.curr_src_base = []
-        temp_base = 1
-        for i in range(self.order-1, -1, -1):
-            if i == curr_order: continue                
-            self.curr_src_base.insert(0, temp_base)
-            temp_base *= self.input_mat.src_dims[i]            
-        self.curr_src_base = torch.tensor(self.curr_src_base, device=self.i_device)
-        self.curr_src_dims = copy.deepcopy(self.input_mat.src_dims)
-        self.curr_src_dims.pop(curr_order)
-        self.curr_src_dims = torch.tensor(self.curr_src_dims, device=self.i_device)
-        self.curr_src_base, self.curr_src_dims = self.curr_src_base.unsqueeze(0), self.curr_src_dims.unsqueeze(0)
-                             
-        pbar = tqdm(total=num_total_entry)
+        # chech whether the loss decreases         
         with torch.no_grad():
-            while curr_idx < num_total_entry:
-                if batch_size > num_total_entry - curr_idx: curr_batch_size = num_total_entry - curr_idx
-                else: curr_batch_size = batch_size
-                
-                # Get the index of pairs                
-                pair_idx = torch.arange(curr_idx, curr_idx + curr_batch_size, dtype=torch.long, device=self.i_device)
-                pair_idx = pair_idx // num_slice_entry
-                pair_start_idx = curr_idx // num_slice_entry
-                pair_end_idx = (curr_idx + curr_batch_size) // num_slice_entry
-                if (curr_idx + curr_batch_size) % num_slice_entry != 0: 
-                    pair_end_idx += 1
-                    
-                # Initialize preds and vals
-                vals0 = torch.empty(curr_batch_size, dtype=torch.double, device=self.i_device)
-                vals1 = torch.empty(curr_batch_size, dtype=torch.double, device=self.i_device)  
-                model_idx0 = torch.zeros((curr_batch_size, self.order), dtype=torch.long, device=self.i_device)                
-                model_idx1 = torch.zeros((curr_batch_size, self.order), dtype=torch.long, device=self.i_device)                
-                batch_idx, chunk_size = 0, 0
-                for i in range(pair_start_idx, pair_end_idx):
-                    # Extract value
-                    curr_vals0 = _matrix.extract_slice(curr_order, self.perm_list[curr_order][first_elem[i]].item())
-                    curr_vals1 = _matrix.extract_slice(curr_order, self.perm_list[curr_order][second_elem[i]].item())
-                    curr_vals0, curr_vals1 = torch.tensor(curr_vals0, device=self.i_device), torch.tensor(curr_vals1, device=self.i_device)
-                    if i == pair_start_idx: curr_start_idx = curr_idx % num_slice_entry
-                    else: curr_start_idx = 0
-                    if i == pair_end_idx - 1:
-                        curr_end_idx = (curr_idx + curr_batch_size) % num_slice_entry
-                        if curr_end_idx == 0: curr_end_idx = num_slice_entry
-                    else: curr_end_idx = num_slice_entry
-                    chunk_size = curr_end_idx - curr_start_idx
-                    
-                    vals0[batch_idx: batch_idx + chunk_size] = curr_vals0[curr_start_idx:curr_end_idx]
-                    vals1[batch_idx: batch_idx + chunk_size] = curr_vals1[curr_start_idx:curr_end_idx]
-                    
-                    # Extract Row and column indices
-                    _temp = torch.arange(curr_start_idx, curr_end_idx, dtype=torch.long, device=self.i_device)
-                    _temp = _temp.unsqueeze(-1) // self.curr_src_base % self.curr_src_dims  # batch size x self.order-1
-                    for j in range(self.order):
-                        if j == curr_order:                            
-                            model_idx0[batch_idx:batch_idx+chunk_size, j] = first_elem[i]
-                            model_idx1[batch_idx:batch_idx+chunk_size, j] = second_elem[i]
-                        elif j < curr_order:
-                            model_idx0[batch_idx:batch_idx+chunk_size, j] = self.inv_perm_list[j][_temp[:, j]]
-                            model_idx1[batch_idx:batch_idx+chunk_size, j] = self.inv_perm_list[j][_temp[:, j]]
-                        else:
-                            model_idx0[batch_idx:batch_idx+chunk_size, j] = self.inv_perm_list[j][_temp[:, j-1]]
-                            model_idx1[batch_idx:batch_idx+chunk_size, j] = self.inv_perm_list[j][_temp[:, j-1]]                    
-                    batch_idx += chunk_size
-                
-                # Build inputs                
-                output0, output1 = self.predict(model_idx0), self.predict(model_idx1)                
-                loss_list.scatter_(0, pair_idx, -torch.square(output0-vals0)-torch.square(output1-vals1), reduce='add')
-                loss_list.scatter_(0, pair_idx, torch.square(output0-vals1)+torch.square(output1-vals0), reduce='add')
-                
-                curr_idx += curr_batch_size
-                pbar.update(curr_batch_size)
-        
-            pbar.close()
-            target_pair = loss_list < 0
-            delta_loss = loss_list[target_pair].sum().item()
-            first_model_idx, second_model_idx = first_elem[target_pair].clone(), second_elem[target_pair].clone()
-            first_mat_idx, second_mat_idx = self.perm_list[curr_order][first_model_idx].clone(), self.perm_list[curr_order][second_model_idx].clone()
+            # random pairing  
+            '''
+            num_pair = math.ceil(self.input_mat.src_dims[mode]/2)
+            tidx = torch.randperm(self.input_mat.src_dims[mode], device=self.i_device)
+            first_tidx, second_tidx = tidx[:num_pair], tidx[num_pair:]
+            if self.input_mat.src_dims[mode] % 2 == 1:
+                second_tidx = torch.cat([second_tidx, torch.tensor([first_tidx[-1].item()], device=self.i_device)])             
+            '''
             
-            self.perm_list[curr_order][first_model_idx], self.perm_list[curr_order][second_model_idx] = second_mat_idx, first_mat_idx
-            self.inv_perm_list[curr_order][first_mat_idx], self.inv_perm_list[curr_order][second_mat_idx] = second_model_idx, first_model_idx
-            return delta_loss
+            #preprocess            
+            tidx2pidx = torch.arange(curr_dim, device=self.i_device)
+            tidx2pidx[first_tidx] = torch.arange(num_pair, device=self.i_device)
+            tidx2pidx[second_tidx] = torch.arange(num_pair, device=self.i_device)        
+            if curr_dim % 2 == 1:
+                tidx2pidx[poped] = 0
+            
+            tidx2new_tidx = torch.arange(curr_dim, device=self.i_device)
+            tidx2new_tidx[first_tidx] = second_tidx.clone()
+            tidx2new_tidx[second_tidx] = first_tidx.clone()
+
+            # check the loss before switching
+            pair2loss = torch.zeros(num_pair, device=self.i_device, dtype=torch.double)           
+            curr_idx = 0
+            while curr_idx < self.input_mat.num_train:
+                # Compute thre current
+                curr_batch_size = min(self.input_mat.num_train - curr_idx, batch_size)
+                curr_ten_idx = self.input_mat.src_train_idx[curr_idx:curr_idx+curr_batch_size]
+                curr_ten_idx = torch.tensor(curr_ten_idx, device=self.i_device)                
+                curr_model_idx = curr_ten_idx.clone()                
+                for j in range(self.order):
+                    curr_model_idx[:, j] = self.inv_perm_list[j][curr_ten_idx[:, j]]
+
+                curr_preds = self.predict(curr_model_idx) # + self.input_mat.train_avg
+                curr_vals = torch.tensor(self.input_mat.src_train_vals[curr_idx:curr_idx+curr_batch_size], device=self.i_device)                
+                curr_loss = torch.square(curr_preds - curr_vals)
+                pair_idx = tidx2pidx[curr_ten_idx[:, curr_order]]
+                pair2loss = pair2loss.scatter_reduce(0, pair_idx, -curr_loss, reduce="sum")                
+
+                # Compute the future loss
+                new_tidx = tidx2new_tidx[curr_ten_idx[:, curr_order]]
+                curr_model_idx[:, curr_order] = self.inv_perm_list[curr_order][new_tidx]
+                #print(f"mean: {torch.max(curr_model_idx, dim=0)}")
+                curr_preds = self.predict(curr_model_idx)  # + self.input_mat.train_avg
+                curr_loss = torch.square(curr_preds - curr_vals)
+                pair_idx = tidx2pidx[new_tidx]
+                pair2loss = pair2loss.scatter_reduce(0, pair_idx, curr_loss, reduce="sum")                
+                curr_idx += curr_batch_size
+
+            #print(pair2loss)
+            valid_pair = pair2loss < 0
+            delta_loss = torch.sum(pair2loss[valid_pair]).item()
+            first_tidx, second_tidx = first_tidx[valid_pair], second_tidx[valid_pair]
+            prev_inv_perm = self.inv_perm_list[curr_order].clone()
+            self.inv_perm_list[curr_order][first_tidx] = prev_inv_perm[second_tidx]
+            self.inv_perm_list[curr_order][second_tidx] = prev_inv_perm[first_tidx]
+      
+        return delta_loss
