@@ -30,7 +30,7 @@ def train_model(n_model, args):
     max_fit = -sys.float_info.max
     prev_fit = -1
     n_model.model.train()
-    minibatch_size = n_model.input_mat.num_train // args.num_batch
+    minibatch_size = n_model.input_mat.real_num_entries // args.num_batch
     
     with open(args.save_path + ".txt", 'a') as lossfile:
         lossfile.write(f'compressed size: {n_model.comp_size} bytes\n')    
