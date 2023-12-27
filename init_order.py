@@ -123,6 +123,6 @@ if __name__ == '__main__':
     for i in range(order):
         if not change_order[i]: model2tens[i] = list(range(dims[i]))
 
-    with open(args.save_path + ".pickle", mode="wb") as f:
-        pickle.dump(model2tens, f)
+    #with open(args.save_path + ".pickle", mode="wb") as f:
+    #    pickle.dump(model2tens, f)
     print("Total elapsed time:", time.time() - start_time)
