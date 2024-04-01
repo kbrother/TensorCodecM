@@ -4,7 +4,7 @@ import torch
 import time
 import argparse
 import pickle
-
+import sys
 
 def loss_fn(z, batch_size=-1):
     rets = []
@@ -82,6 +82,7 @@ def reorder(load_path, order, device):
 # python init_order.py -lp features/action_80_factor -sp mapping/action_80_model2tens -de 0 -di 100 570 567 
 # python init_order.py -lp features/airquality_80_factor -sp mapping/airquality_80_model2tens -de 0 -di 5600 362 6 
 # python init_order.py -lp features/pems_80_factor -sp mapping/pems_80_model2tens -de 0 -di 963 144 440
+# python init_order.py -lp features/kstock_factor -sp mapping/kstock_factor -de 0 -di 5270 88 1000
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-lp', '--load_path', type=str)
@@ -100,6 +101,7 @@ if __name__ == '__main__':
 
     start_time = time.time()
     device = torch.device(f'cuda:{args.device}')
+    sys.setrecursionlimit(max(args.dims) + 1)
     change_order, model2tens = reorder(args.load_path, order, device)
 
     for i in range(order):
