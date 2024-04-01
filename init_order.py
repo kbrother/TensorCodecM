@@ -80,6 +80,7 @@ def reorder(load_path, order, device):
 
 # python init_order.py -lp features/pems_80_factor -sp mapping/pems_80_model2tens -de 0 -di 963 144 440
 # python init_order.py -lp features/kstock_factor -sp mapping/kstock_model2tens -de 0 -di 5270 88 1000
+# python init_order.py -lp features/usstock_factor -sp mapping/usstock_model2tens -de 0 -di 7883 88 1000
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-lp', '--load_path', type=str)

@@ -77,6 +77,7 @@ def train_model(n_model, args):
     
 
 # python TensorCodec_completion/main.py train -d kstock -ip data/23-Irregular-Tensor/kstock.npy -de 0 -hs 8 -rk 8 -lr 0.1 -sp TensorCodec_completion/results/kstock_r8_h8 -e 10
+# python TensorCodec_completion/main.py train -d usstock -ip data/23-Irregular-Tensor/usstock.npy -de 0 -hs 8 -rk 8 -lr 0.1 -sp TensorCodec_completion/results/usstock_r8_h8 -e 10
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument('action', type=str, help='train')
