@@ -38,84 +38,50 @@ def train_model(n_model, args):
     tol_count = 0
     start_time = time.time()
     for epoch in range(args.epoch): 
-        optimizer = torch.optim.Adam(n_model.model.parameters(), lr=args.lr/args.num_batch, weight_decay=args.weight_decay) 
+        optimizer = torch.optim.Adam(n_model.model.parameters(), lr=args.lr) 
         n_model.model.train()               
         curr_order = np.random.permutation(n_model.input_mat.num_train)            
         
-        # Gradietn descent
+        # Gradient descent        
         train_loss, train_norm = 0, 0
+        #for i in range(1):
         for i in tqdm(range(0, n_model.input_mat.num_train, minibatch_size)):
             curr_batch_size = min(n_model.input_mat.num_train - i, minibatch_size)            
             #samples = n_model.input_mat.src_train_idx[curr_order[i:i+curr_batch_size]]            
             samples = curr_order[i:i+curr_batch_size]
             optimizer.zero_grad()
-            sub_train_loss, sub_train_norm = n_model.L2_loss(True, "train", args.batch_size, samples)
+            sub_train_loss, sub_train_norm = n_model.L2_loss(True, args.batch_size, samples)      
+            train_loss += sub_train_loss
+            train_norm += sub_train_norm
             optimizer.step() 
         
         # Reordering
         n_model.model.eval()
         for j in range(n_model.input_mat.order):
-            delta_loss = n_model.reordering(j, args.batch_size)       
-        
-        #train_fit = 1 - math.sqrt(train_loss) / math.sqrt(train_norm)
-        with torch.no_grad():
-            train_loss, train_norm = n_model.L2_loss(False, "train", args.batch_size, np.arange(n_model.input_mat.num_train))
-            val_loss, val_norm = n_model.L2_loss(False, "val", args.batch_size, np.arange(n_model.input_mat.num_val))
-            test_loss, test_norm = n_model.L2_loss(False, "test", args.batch_size, np.arange(n_model.input_mat.num_test))
-            valid_norm, total_norm = (train_norm + val_norm), (train_norm + val_norm + test_norm)
-            valid_err, total_err = (train_loss + val_loss), (train_loss + val_loss + test_loss)
-            valid_fit = 1 - math.sqrt(valid_err)/math.sqrt(valid_norm)
-            total_fit = 1 - math.sqrt(total_err)/math.sqrt(total_norm) 
-            
-            if max_fit < valid_fit:
-                max_fit = valid_fit
-                max_epoch = epoch
-                prev_model = copy.deepcopy(n_model.model.state_dict())
-                prev_inv_perm = [_perm.clone() for _perm in n_model.inv_perm_list]
-          
+            delta_loss = n_model.reordering(j, args.batch_size)               
+                    
+        train_fit = 1 - math.sqrt(train_loss)/math.sqrt(train_norm)             
         with open(args.save_path + ".txt", 'a') as lossfile:
-            lossfile.write(f'epoch:{epoch}, valid loss: {valid_fit}, test loss: {total_fit}\n')    
-            print(f'epoch:{epoch}, valid loss: {valid_fit}, test loss: {total_fit}')     
+            lossfile.write(f'epoch:{epoch}, train loss: {train_fit}\n')    
+            print(f'epoch:{epoch}, train loss: {train_fit}')     
+            
+        if time.time() - start_time > 3600*24:
+            break
                    
         #if tol_count >= args.tol: break
 
-    n_model.model.load_state_dict(prev_model)
-    n_model.inv_perm_list = prev_inv_perm
-    with torch.no_grad():
-        train_loss, train_norm = n_model.L2_loss(False, "train", args.batch_size, np.arange(n_model.input_mat.num_train))
-        val_loss, val_norm = n_model.L2_loss(False, "val", args.batch_size, np.arange(n_model.input_mat.num_val))
-        test_loss, test_norm = n_model.L2_loss(False, "test", args.batch_size, np.arange(n_model.input_mat.num_test))
-        valid_norm, total_norm = (train_norm + val_norm), (train_norm + val_norm + test_norm)
-        valid_err, total_err = (train_loss + val_loss), (train_loss + val_loss + test_loss)
-        valid_fit = 1 - math.sqrt(valid_err)/math.sqrt(valid_norm)
-        total_fit = 1 - math.sqrt(total_err)/math.sqrt(total_norm) 
-        
-        with open(args.save_path + ".txt", 'a') as lossfile:
-            lossfile.write(f'epoch:{epoch}, valid loss: {valid_fit}, test loss: {total_fit}\n')    
-            print(f'epoch:{epoch}, valid loss: {valid_fit}, test loss: {total_fit}')                        
-    
-    torch.save({
-        'model_state_dict': prev_model,
-        'loss': max_fit,
-        'inv_perm_list': prev_inv_perm
-    }, args.save_path + ".pt")        
     end_time = time.time()
     with open(args.save_path + ".txt", 'a') as lossfile:
         lossfile.write(f'running time: {end_time - start_time}\n')    
     print(f'running time: {end_time - start_time}')
     
 
-# python main.py test_perm -d uber -ip ../data/uber -k 5 -de 0 1 2 3 -hs 12 -r 12 -lr 0.1 -sp results/uber
-# python main.py train -d uber -ip ../data/uber -k 80 -de 4 5 6 7 -hs 8 -r 8 -lr 0.1 -sp results/uber_r8_h8_k80_wd0 -wd 0
-# python main.py train -d airquality -ip ../data/airquality -k 5 -de 0 1 2 3 -hs 8 -r 8 -lr 0.1 -sp results/airquality
-# python main.py train -d action -ip ../data/action -k 5 -de 0 1 2 3 -hs 8 -r 8 -lr 0.1 -sp results/action
-# python main.py train -d pems -ip ../data/pems -k 5 -de 0 1 2 3 -hs 8 -r 8 -lr 0.1 -sp results/pems
+# python TensorCodec_completion/main.py train -d kstock -ip data/23-Irregular-Tensor/kstock.npy -de 0 -hs 8 -rk 8 -lr 0.1 -sp TensorCodec_completion/results/kstock_r8_h8 -e 10
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument('action', type=str, help='train')
     parser.add_argument("-d", "--dataset", type=str)   
     parser.add_argument("-ip", "--input_path", type=str)
-    parser.add_argument("-k", "--known_entry", type=int)
     
     parser.add_argument(
         "-de", "--device",
@@ -153,18 +119,8 @@ if __name__ == '__main__':
     )
     
     parser.add_argument(
-        "-lp", "--load_path",
-        action="store", default="./params/", type=str
-    )
-        
-    parser.add_argument(
         "-hs", "--hidden_size",
         action="store", default=11, type=int
-    )
-
-    parser.add_argument(
-        "-wd", "--weight_decay",
-        action="store", default=0, type=int
     )
         
     args = parser.parse_args()      
@@ -173,7 +129,7 @@ if __name__ == '__main__':
         lines = f.read().split("\n")
         input_size = [[int(word) for word in line.split()] for line in lines if line]        
      
-    input_mat = tensor(input_size, args.input_path, args.device[0], args.known_entry)        
+    input_mat = tensor(input_size, args.input_path, args.device[0])        
     print("load finish")
 
     n_model = TensorCodec(input_mat, args.rank, input_size, 

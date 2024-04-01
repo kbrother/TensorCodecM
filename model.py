@@ -89,7 +89,7 @@ class TensorCodec:
         # Load factors
         self.factors = []
         for mode in range(self.order):
-            self.factors.append(np.load(f'TensorCodec_completion/features/{args.dataset}_{args.known_entry}_factor{mode+1}.npy'))
+            self.factors.append(np.load(f'TensorCodec_completion/features/{args.dataset}_factor{mode+1}.npy'))
             self.factors[mode] = torch.tensor(self.factors[mode], device=self.i_device)
         
         # Build bases, order x k
@@ -130,7 +130,7 @@ class TensorCodec:
         
         # model -> tensor
         self.perm_list = [torch.tensor(list(range(self.input_mat.dims[i])), dtype=torch.long, device=self.i_device) for i in range(self.order)]
-        with open(f'TensorCodec_completion/mapping/{args.dataset}_{args.known_entry}_model2tens.pickle', 'rb') as f:
+        with open(f'TensorCodec_completion/mapping/{args.dataset}_model2tens.pickle', 'rb') as f:
             mappings = pickle.load(f)
         for mode in range(self.order):
             self.perm_list[mode][range(len(mappings[mode]))] = torch.tensor(mappings[mode], dtype=torch.long, device=self.i_device)
@@ -160,25 +160,15 @@ class TensorCodec:
     
     # minibatch L2 loss
     # samples: sample idx, batch size
-    def L2_loss(self, need_bp, set_type, batch_size, samples):
+    def L2_loss(self, need_bp, batch_size, samples):
         return_loss, minibatch_norm = 0., 0.
         num_sample = samples.shape[0]
         # Indices of sampled matrix entries        
         for i in range(0, num_sample, batch_size):
             with torch.no_grad():
                 curr_batch_size = min(batch_size, num_sample - i)
-
-                if set_type == "train":
-                    curr_ten_idx = self.input_mat.src_train_idx[samples[i:i+curr_batch_size]]
-                    vals = torch.tensor(self.input_mat.src_train_vals[samples[i:i+curr_batch_size]], device=self.i_device)
-                elif set_type == "val":
-                    curr_ten_idx = self.input_mat.src_val_idx[samples[i:i+curr_batch_size]]
-                    vals = torch.tensor(self.input_mat.src_val_vals[samples[i:i+curr_batch_size]], device=self.i_device)
-                elif set_type == "test":
-                    curr_ten_idx = self.input_mat.src_test_idx[samples[i:i+curr_batch_size]]
-                    vals = torch.tensor(self.input_mat.src_test_vals[samples[i:i+curr_batch_size]], device=self.i_device)
-                else:
-                    raise ValueError("wrong input for the set type")
+                curr_ten_idx = self.input_mat.src_train_idx[samples[i:i+curr_batch_size]]
+                vals = torch.tensor(self.input_mat.src_train_vals[samples[i:i+curr_batch_size]], device=self.i_device)
                 curr_ten_idx = torch.tensor(curr_ten_idx, device=self.i_device)                
                 
                 curr_model_idx = curr_ten_idx.clone()                
@@ -313,8 +303,9 @@ class TensorCodec:
 
             # check the loss before switching
             pair2loss = torch.zeros(num_pair, device=self.i_device, dtype=torch.double)           
-            curr_idx = 0
-            while curr_idx < self.input_mat.num_train:
+            #curr_idx = 0
+            for curr_idx in tqdm(range(0, self.input_mat.num_train, batch_size)):
+            #while curr_idx < self.input_mat.num_train:
                 # Compute thre current
                 curr_batch_size = min(self.input_mat.num_train - curr_idx, batch_size)
                 curr_ten_idx = self.input_mat.src_train_idx[curr_idx:curr_idx+curr_batch_size]
