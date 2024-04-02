@@ -56,10 +56,12 @@ def train_model(n_model, args):
             optimizer.step() 
         
         # Reordering
+        '''
         n_model.model.eval()
         for j in range(n_model.input_mat.order):
             delta_loss = n_model.reordering(j, args.batch_size)               
-                    
+        '''
+        
         train_fit = 1 - math.sqrt(train_loss)/math.sqrt(train_norm)             
         with open(args.save_path + ".txt", 'a') as lossfile:
             lossfile.write(f'epoch:{epoch}, train loss: {train_fit}\n')    
@@ -76,8 +78,8 @@ def train_model(n_model, args):
     print(f'running time: {end_time - start_time}')
     
 
-# python TensorCodec_completion/main.py train -d kstock -ip data/23-Irregular-Tensor/kstock.npy -de 0 -hs 8 -rk 8 -lr 0.1 -sp TensorCodec_completion/results/kstock_r8_h8 -e 10
-# python TensorCodec_completion/main.py train -d usstock -ip data/23-Irregular-Tensor/usstock.npy -de 0 -hs 8 -rk 8 -lr 0.1 -sp TensorCodec_completion/results/usstock_r8_h8 -e 10
+# python TensorCodec_completion/main.py train -d mimic3 -ip data/23-Irregular-Tensor/mimic3.pickle -de 0 -hs 8 -rk 8 -lr 0.1 -sp TensorCodec_completion/results/mimic3_r8_h8 -e 10 -b 8192 
+# python TensorCodec_completion/main.py train -d cms -ip data/23-Irregular-Tensor/cms.pickle -de 0 -hs 8 -rk 8 -lr 0.1 -sp TensorCodec_completion/results/cms_r8_h8 -e 10 -b 8192 
 if __name__ == '__main__':    
     parser = argparse.ArgumentParser()
     parser.add_argument('action', type=str, help='train')
